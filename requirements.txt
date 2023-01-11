@@ -1,0 +1,6 @@
+simplejson
+prometheus-client
+easysnmp
+PyYAML
+psutil
+cherrypy

@@ -1,0 +1,30 @@
+---
+# Log Parameters, You dont need to change this (unless directed)
+logParams:
+  logFile: '/opt/snmpmon/logfile.log'
+  logLevel: 'DEBUG'
+  rotateTime: 'midnight'
+  backupCount: 5
+
+# Http parameters: Listen on port 8080
+httpParams:
+  listen: 8080
+
+# TMP Dir to save output from SNMP in json format,
+# and how many copies to keep. 10 copies is enough
+# and it does not overload container with too many results
+# Do not lower less than 1 (and do this only if container uses too much disk)
+# Which should not - unless there is many switches.
+tmpdir: '/opt/snmpmon/output/'
+outcopies: 10
+
+# For snmpParams - see here for accepted keys:
+# https://easysnmp.readthedocs.io/en/latest/session_api.html
+# It covers pretty much all needed features for v1,v2,v3
+# Specify all as needed for each switch.
+snmpMon:
+  dellos9_s0:
+    snmpParams:
+        community: mgmt_hep
+        hostname: 172.16.1.1
+        version: 2
