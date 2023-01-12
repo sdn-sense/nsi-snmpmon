@@ -28,3 +28,41 @@ snmpMon:
         community: mgmt_hep
         hostname: 172.16.1.1
         version: 2
+
+# Filter is configured for each host.
+# Allowed operators:
+# and - means all filters defined must evaluate to True and match
+# or - means any one filter must evaluate to True.
+
+# filter keys,value available (can be string, will compare match, or if list, will see if val is in list):
+# KEY - VALS
+# Key - these are the keys queried and accessed by snmp query: 'ifDescr', 'ifType', 'ifMtu', 'ifAdminStatus', 'ifOperStatus','ifHighSpeed', 'ifAlias', 'ifHCInOctets', 'ifHCOutOctets', 'ifInDiscards', 'ifOutDiscards', 'ifInErrors', 'ifOutErrors', 'ifHCInUcastPkts', 'ifHCOutUcastPkts', 'ifHCInMulticastPkts', 'ifHCOutMulticastPkts', 'ifHCInBroadcastPkts', 'ifHCOutBroadcastPkts'
+# hostname - will be same as hostname defined (no need to check, as it checks before)
+# ifAlias - Interface or Vlan Description
+# ifDescr - Interface or Vlan Name
+# ifType - Interface Type
+
+# Few examples:
+# Filter rules below check, that hostname is dellos9_s0 and include ALL stats, if Key == 'ifAdminStatus' and ifDescr is in this list ["Port-channel 103", "hundredGigE 1/3"].
+# This filter will include ONLY ifAdminStatus for Ports: "Port-channel 103", "hundredGigE 1/3"
+#filterRules:
+#  dellos9_s0:
+#    operator: 'and'
+#    filters:
+#      Key: 'ifAdminStatus'
+#      ifDescr: ["Port-channel 103", "hundredGigE 1/3"]
+
+# Filter rules below check, that hostname is dellos9_s0 and include ANY stats, if Key == 'ifAdminStatus' or ifDescr is in this list ["Port-channel 103", "hundredGigE 1/3"].
+# This filter will include ALL Interfaces ifAdminStatus AND ALL Keys for interfaces in "Port-channel 103", "hundredGigE 1/3"
+#filterRules:
+#  dellos9_s0:
+#    operator: 'or'
+#    filters:
+#      Key: 'ifAdminStatus'
+#      ifDescr: ["Port-channel 103", "hundredGigE 1/3"]
+
+filterRules:
+  dellos9_s0:
+    operator: 'and'
+    filters:
+      ifDescr: ["Port-channel 103", "hundredGigE 1/3", "hundredGigE 1/10", "hundredGigE 1/11", "hundredGigE 1/12", "hundredGigE 1/23", "hundredGigE 1/31", "hundredGigE 1/32", "fortyGigE 1/30/1", 'Vlan 1779', 'Vlan 1780', 'Vlan 1781', 'Vlan 1782', 'Vlan 1783', 'Vlan 1784', 'Vlan 1785', 'Vlan 1786', 'Vlan 1787', 'Vlan 1788', 'Vlan 1789', 'Vlan 1790', 'Vlan 1791', 'Vlan 1792', 'Vlan 1793', 'Vlan 1794', 'Vlan 1795', 'Vlan 1796', 'Vlan 1797', 'Vlan 1798', 'Vlan 1799', 'Vlan 3600', 'Vlan 3601', 'Vlan 3602', 'Vlan 3603', 'Vlan 3604', 'Vlan 3605', 'Vlan 3606', 'Vlan 3607', 'Vlan 3608', 'Vlan 3609', 'Vlan 3610', 'Vlan 3611', 'Vlan 3612', 'Vlan 3613', 'Vlan 3614', 'Vlan 3615', 'Vlan 3616', 'Vlan 3617', 'Vlan 3618', 'Vlan 3619', 'Vlan 3985', 'Vlan 3986', 'Vlan 3987', 'Vlan 3988', 'Vlan 3989', 'Vlan 3870', 'Vlan 3871', 'Vlan 3872', 'Vlan 3873', 'Vlan 3874', 'Vlan 3875', 'Vlan 3876', 'Vlan 3877', 'Vlan 3878', 'Vlan 3879', 'Vlan 3880', 'Vlan 3881', 'Vlan 3882', 'Vlan 3883', 'Vlan 3911', 'Vlan 3912', 'Vlan 3870', 'Vlan 3871', 'Vlan 3872', 'Vlan 3873', 'Vlan 3874', 'Vlan 3875', 'Vlan 3876', 'Vlan 3877', 'Vlan 3878', 'Vlan 3879', 'Vlan 3880', 'Vlan 3881', 'Vlan 3882', 'Vlan 3883']

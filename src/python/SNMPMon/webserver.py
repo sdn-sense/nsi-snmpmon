@@ -61,6 +61,43 @@ class CherryPyThread():
             time.sleep(0.2)
         return {}
 
+    def __includeFilter(self, keys):
+        """
+        filterRules:
+          dellos9_s0:
+            operator: 'and'
+            filters:
+              Key: 'ifAdminStatus'
+              ifDescr: ["hundredGigE 1/21", "Vlan 100"]
+        where keys:
+        {'ifDescr': 'Vlan 100',
+         'ifType': '135',
+          'ifAlias': 'Kubernetes Multus for SENSE',
+          'hostname': 'dellos9_s0',
+          'Key': 'ifHCInBroadcastPkts'}
+        """
+        if 'filterRules' not in self.config:
+            return True
+        if keys['hostname'] not in self.config['filterRules']:
+            return True
+        filterChecks = []
+        for filterKey, filterVal in self.config['filterRules'][keys['hostname']]['filters'].items():
+            if isinstance(filterVal, str):
+                if keys[filterKey] == filterVal:
+                    filterChecks.append(True)
+                else:
+                    filterChecks.append(False)
+            elif isinstance(filterVal, list):
+                if keys[filterKey] in filterVal:
+                    filterChecks.append(True)
+                else:
+                    filterChecks.append(False)
+        if self.config['filterRules'][keys['hostname']]['operator'] == 'and' and all(filterChecks):
+            return True
+        if self.config['filterRules'][keys['hostname']]['operator'] == 'or' and any(filterChecks):
+            return True
+        return False
+
     def __getSNMPData(self, registry, **kwargs):
         """Add SNMP Data to prometheus output"""
         # Here get info from DB for switch snmp details
@@ -89,7 +126,8 @@ class CherryPyThread():
                              'ifHCInBroadcastPkts', 'ifHCOutBroadcastPkts']:
                     if key1 in val and isValFloat(val[key1]):
                         keys['Key'] = key1
-                        snmpGauge.labels(**keys).set(val[key1])
+                        if self.__includeFilter(keys):
+                            snmpGauge.labels(**keys).set(val[key1])
 
     def __metrics(self):
         """Return all available Hosts, where key is IP address."""
