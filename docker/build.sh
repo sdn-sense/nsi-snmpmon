@@ -1,2 +1,2 @@
 #!/bin/bash
-docker buildx build --platform=linux/amd64 --no-cache -t nsi-snmpmon .
+docker buildx build --no-cache --platform=linux/amd64 -t nsi-snmpmon .

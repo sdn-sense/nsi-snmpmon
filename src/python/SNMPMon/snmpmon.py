@@ -49,6 +49,46 @@ class SNMPMonitoring():
             os.unlink(dstFile)
         os.symlink(srcFile, dstFile)
 
+    def __includeFilter(self, key, val):
+        """
+        filterRules:
+          dellos9_s0:
+            operator: 'and'
+            filters:
+              Key: 'ifAdminStatus'
+              ifDescr: ["hundredGigE 1/21", "Vlan 100"]
+        where keys:
+        {'ifDescr': 'Vlan 100',
+         'ifType': '135',
+          'ifAlias': 'Kubernetes Multus for SENSE',
+          'hostname': 'dellos9_s0',
+          'Key': 'ifHCInBroadcastPkts'}
+        """
+        if 'filterRules' not in self.config:
+            return True
+        if self.hostname not in self.config['filterRules']:
+            return True
+        filterChecks = []
+        for filterKey, filterVal in self.config['filterRules'][self.hostname].get('filters', {}).items():
+            if filterKey != key:
+                continue
+            if isinstance(filterVal, str):
+                if val == filterVal:
+                    filterChecks.append(True)
+                else:
+                    filterChecks.append(False)
+            elif isinstance(filterVal, list):
+                if val in filterVal:
+                    filterChecks.append(True)
+                else:
+                    filterChecks.append(False)
+        if not filterChecks:
+            return True
+        if self.config['filterRules'][self.hostname]['operator'] == 'and' and all(filterChecks):
+            return True
+        if self.config['filterRules'][self.hostname]['operator'] == 'or' and any(filterChecks):
+            return True
+        return False
 
     def scanMacAddresses(self, session):
         """Scan all MAC addresses"""
@@ -86,7 +126,9 @@ class SNMPMonitoring():
                 for item in allvals:
                     indx = item.oid_index
                     out.setdefault(indx, {})
-                    out[indx][key] = item.value.replace('\x00', '')
+                    val = item.value.replace('\x00', '')
+                    if self.__includeFilter(key, val):
+                        out[indx][key] = val
             except EasySNMPUnknownObjectIDError as ex:
                 self.logger.warning(f'Got exception for key {key}: {ex}')
                 err.append(ex)
@@ -105,7 +147,6 @@ class SNMPMonitoring():
         self._cleanOldCopies(ignoreList=ignoreList)
         if err:
             raise Exception(f'SNMP Monitoring Errors: {err}')
-
 
 def execute(hostname):
     """Main Execute."""

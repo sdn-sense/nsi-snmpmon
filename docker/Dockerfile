@@ -1,8 +1,8 @@
  FROM almalinux:8
 
-MAINTAINER Justas Balcas <jbalcas@caltech.edu>
+MAINTAINER Justas Balcas <juztas@gmail.com>
 
-RUN yum -y install git python39 python39-pyyaml python39-devel gcc net-snmp-libs net-snmp-devel openssl-devel httpd httpd-devel python39-mod_wsgi mod_ssl cronie python3-pyOpenSSL fetch-crl && yum clean all
+RUN yum -y install wget epel-release &&  yum -y install git python39 python39-pyyaml python39-devel gcc net-snmp-libs net-snmp-devel openssl-devel httpd httpd-devel python39-mod_wsgi mod_ssl cronie python3-pyOpenSSL fetch-crl && yum clean all
 
 RUN mkdir -p /opt/snmpmon/output/ & \
     mkdir -p /etc/grid-security/certificates & \
@@ -22,8 +22,8 @@ WORKDIR /opt/snmpmon/nsi-snmpmon
 RUN pip3 install -r requirements.txt || exit $?
 RUN python3 setup.py install || exit $?
 # Copy all supervisord fils
-COPY packaging/etc/supervisord.conf /etc/
-COPY packaging/etc/supervisord.d/* /etc/supervisord.d/
+RUN cp packaging/etc/supervisord.conf /etc/ && \
+    cp packaging/etc/supervisord.d/* /etc/supervisord.d/
 
 EXPOSE 80 443
 
