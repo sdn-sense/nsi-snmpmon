@@ -21,7 +21,7 @@ class Application():
         """ WSGI call """
         try:
             wrapper = self.__getwrapper(environ)
-            return wrapper.metrics(environ, start_fn)
+            return wrapper.maincall(environ, start_fn)
         except:
             print(traceback.print_exc())
             raise

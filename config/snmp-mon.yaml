@@ -6,17 +6,14 @@ logParams:
   rotateTime: 'midnight'
   backupCount: 5
 
-# Http parameters: Listen on port 8080
-httpParams:
-  listen: 8080
+# What clients to allow to access the API
+# For autogole monitoring to be able to access the API, add the following to the list:
+# /C=US/ST=California/L=Pasadena/O=Caltech/CN=sdn-sense.dev/C=US/ST=California/L=Pasadena/O=Caltech/CN=autogole-grafana-prometheus.ultralight.org
+authorize_dns:
+  - '/C=US/ST=California/L=Pasadena/O=Caltech/CN=sdn-sense.dev/C=US/ST=California/L=Pasadena/O=Caltech/CN=autogole-grafana-prometheus.ultralight.org'
 
-# TMP Dir to save output from SNMP in json format,
-# and how many copies to keep. 10 copies is enough
-# and it does not overload container with too many results
-# Do not lower less than 1 (and do this only if container uses too much disk)
-# Which should not - unless there is many switches.
+# TMP Dir to save output from SNMP in json format.
 tmpdir: '/opt/snmpmon/output/'
-outcopies: 10
 
 # For snmpParams - see here for accepted keys:
 # https://easysnmp.readthedocs.io/en/latest/session_api.html

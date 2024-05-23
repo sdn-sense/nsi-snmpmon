@@ -13,7 +13,6 @@ import shutil
 import datetime
 import logging
 import logging.handlers
-import shutil
 import simplejson as json
 from yaml import safe_load as yload
 
@@ -96,6 +95,23 @@ def checkLoggingHandler(**kwargs):
             if isinstance(handler, kwargs['handler']):
                 return handler
     return None
+
+def getStreamLogger(**kwargs):
+    """Get Stream Logger."""
+    kwargs["handler"] = logging.StreamHandler
+    handler = checkLoggingHandler(**kwargs)
+    logger = logging.getLogger(kwargs.get("service", __name__))
+    if not handler:
+        handler = logging.StreamHandler()
+        formatter = logging.Formatter(
+            "%(asctime)s.%(msecs)03d - %(name)s - %(levelname)s - %(message)s",
+            datefmt="%a, %d %b %Y %H:%M:%S",
+        )
+        handler.setFormatter(formatter)
+    if not logger.handlers:
+        logger.addHandler(handler)
+    logger.setLevel(LEVELS[kwargs.get("logLevel", "DEBUG")])
+    return logger
 
 def getTimeRotLogger(**kwargs):
     """Get new Logger for logging."""

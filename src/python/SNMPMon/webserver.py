@@ -10,20 +10,80 @@ Date: 2022/11/21
 import os
 import os.path
 import time
+from datetime import datetime
+from datetime import timezone
 from prometheus_client import generate_latest, CollectorRegistry
 from prometheus_client import Gauge
-from SNMPMon.utilities import getTimeRotLogger
+from SNMPMon.utilities import getStreamLogger
 from SNMPMon.utilities import getFileContentAsJson
 from SNMPMon.utilities import isValFloat
 from SNMPMon.utilities import getUTCnow
 from SNMPMon.utilities import getConfig
 
 
-class Frontend():
+class Authorize():
+
+    def __init__(self, config, logger):
+        self.config = config
+        self.logger = logger
+        self.allowedCerts = []
+        self.loadAuthorized()
+
+    def loadAuthorized(self):
+        """Load all authorized users for FE from git."""
+        for item in self.config.get('authorize_dns', []):
+            self.allowedCerts.append(item)
+
+    @staticmethod
+    def getCertInfo(environ):
+        """Get certificate info."""
+        out = {}
+        for key in ['SSL_CLIENT_V_REMAIN', 'SSL_CLIENT_S_DN', 'SSL_CLIENT_I_DN', 'SSL_CLIENT_V_START', 'SSL_CLIENT_V_END']:
+            if key not in environ:
+                self.logger.debug('Request without certificate. Unauthorized')
+                raise Exception('Unauthorized access. Request without certificate.')
+        out['subject'] = environ['SSL_CLIENT_S_DN']
+        out['notAfter'] = int(datetime.strptime(environ['SSL_CLIENT_V_END'], "%b %d %H:%M:%S %Y %Z").timestamp())
+        out['notBefore'] = int(datetime.strptime(environ['SSL_CLIENT_V_START'], "%b %d %H:%M:%S %Y %Z").timestamp())
+        out['issuer'] = environ['SSL_CLIENT_I_DN']
+        out['fullDN'] = f"{out['issuer']}{out['subject']}"
+        return out
+
+    def checkAuthorized(self, environ):
+        """Check if user is authorized."""
+        if environ['CERTINFO']['fullDN'] in self.allowedCerts:
+            return self.allowedCerts[environ['CERTINFO']['fullDN']]
+        self.logger.info(f"User DN {environ['CERTINFO']['fullDN']} is not in authorized list. Full info: {environ['CERTINFO']}")
+        raise Exception(f"User DN {environ['CERTINFO']['fullDN']} is not in authorized list. Full info: {environ['CERTINFO']}")
+
+    def validateCertificate(self, environ):
+        """Validate certification validity."""
+        timestamp = int(datetime.now(timezone.utc).timestamp())
+        if 'CERTINFO' not in environ:
+            raise Exception('Certificate not found. Unauthorized')
+        for key in ['subject', 'notAfter', 'notBefore', 'issuer', 'fullDN']:
+            if key not in list(environ['CERTINFO'].keys()):
+                self.logger.info(f'{key} not available in certificate retrieval')
+                raise Exception('Unauthorized access')
+        # Check time before
+        if environ['CERTINFO']['notBefore'] > timestamp:
+            self.logger.info(f"Certificate Invalid. Current Time: {timestamp} NotBefore: {environ['CERTINFO']['notBefore']}")
+            raise Exception(f"Certificate Invalid. Full Info: {environ['CERTINFO']}")
+        # Check time after
+        if environ['CERTINFO']['notAfter'] < timestamp:
+            self.logger.info(f"Certificate Invalid. Current Time: {timestamp} NotAfter: {environ['CERTINFO']['notAfter']}")
+            raise Exception(f"Certificate Invalid. Full Info: {environ['CERTINFO']}")
+        # Check DN in authorized list
+        return self.checkAuthorized(environ)
+
+class Frontend(Authorize):
 
     def __init__(self):
         self.config = getConfig('/etc/snmp-mon.yaml')
-        self.logger = getTimeRotLogger(**self.config.get('logParams', {}))
+        self.logger = getStreamLogger(**self.config.get('logParams', {}))
+        self.headers = [('Cache-Control', 'no-cache, no-store, must-revalidate'),
+                        ('Pragma', 'no-cache'), ('Expires', '0'), ('Content-Type', 'text/plain')]
+        Authorize.__init__(self, self.config, self.logger)
 
     def metrics(self):
         """Return metrics view"""
@@ -81,3 +141,18 @@ class Frontend():
                             keys['Key'] = key1
                             snmpGauge.labels(**keys).set(val1)
                 # TODO Add mac addresses to prometheus output
+
+    def maincall(self, environ, start_response):
+        """Main call for WSGI"""
+        # Certificate must be valid
+        try:
+            environ["CERTINFO"] = self.getCertInfo(environ)
+            self.validateCertificate(environ)
+        except Exception as ex:
+            start_response('401 Unauthorized', self.headers)
+            return [bytes(f'Unauthorized access. {str(ex)}', "UTF-8")]
+        if environ['PATH_INFO'] == '/metrics':
+            start_response('200 OK', self.headers)
+            return self.metrics()
+        start_response('404 Not Found', self.headers)
+        return iter([b'Not Found'])
