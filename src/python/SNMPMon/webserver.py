@@ -14,6 +14,7 @@ from datetime import datetime
 from datetime import timezone
 from prometheus_client import generate_latest, CollectorRegistry
 from prometheus_client import Gauge
+from prometheus_client import Info
 from SNMPMon.utilities import getStreamLogger
 from SNMPMon.utilities import getFileContentAsJson
 from SNMPMon.utilities import isValFloat
@@ -34,11 +35,11 @@ class Authorize():
         for item in self.config.get('authorize_dns', []):
             self.allowedCerts.append(item)
 
-    @staticmethod
-    def getCertInfo(environ):
+    def getCertInfo(self, environ):
         """Get certificate info."""
         out = {}
-        for key in ['SSL_CLIENT_V_REMAIN', 'SSL_CLIENT_S_DN', 'SSL_CLIENT_I_DN', 'SSL_CLIENT_V_START', 'SSL_CLIENT_V_END']:
+        for key in ['SSL_CLIENT_V_REMAIN', 'SSL_CLIENT_S_DN',
+                    'SSL_CLIENT_I_DN', 'SSL_CLIENT_V_START', 'SSL_CLIENT_V_END']:
             if key not in environ:
                 self.logger.debug('Request without certificate. Unauthorized')
                 raise Exception('Unauthorized access. Request without certificate.')
@@ -52,7 +53,7 @@ class Authorize():
     def checkAuthorized(self, environ):
         """Check if user is authorized."""
         if environ['CERTINFO']['fullDN'] in self.allowedCerts:
-            return self.allowedCerts[environ['CERTINFO']['fullDN']]
+            return True
         self.logger.info(f"User DN {environ['CERTINFO']['fullDN']} is not in authorized list. Full info: {environ['CERTINFO']}")
         raise Exception(f"User DN {environ['CERTINFO']['fullDN']} is not in authorized list. Full info: {environ['CERTINFO']}")
 
@@ -77,7 +78,7 @@ class Authorize():
         return self.checkAuthorized(environ)
 
 class Frontend(Authorize):
-
+    """Frontend for SNMPMon. Exposes SNMP Data in Prometheus format."""
     def __init__(self):
         self.config = getConfig('/etc/snmp-mon.yaml')
         self.logger = getStreamLogger(**self.config.get('logParams', {}))
@@ -112,11 +113,29 @@ class Frontend(Authorize):
             time.sleep(0.2)
         return {}
 
+    def __addMacInfo(self, macVals, devname, macState):
+        """Add Mac Info to prometheus output"""
+        for vlan, macs in macVals.items():
+            for mac in macs:
+                macState.labels(**{'vlan': vlan, 'hostname': devname}).info({'macaddress': mac})
+
+    def __addGeneralInfo(self, val, devname, snmpGauge):
+        """Add General Info to prometheus output"""
+        keys = {'ifDescr': val.get('ifDescr', ''), 'ifType': val.get('ifType', ''),
+                'ifAlias': val.get('ifAlias', ''), 'hostname': devname}
+        for key1, val1 in val.items():
+            if isValFloat(val1):
+                keys['Key'] = key1
+                snmpGauge.labels(**keys).set(val1)
+
     def __getSNMPData(self, registry):
         """Add SNMP Data to prometheus output"""
         # Here get info from DB for switch snmp details
         output = self.__getLatestOutput()
-        runtimeInfo = Gauge('service_runtime_timestamp', 'Service Runtime Timestamp', ['servicename'], registry=registry)
+        runtimeInfo = Gauge('service_runtime_timestamp', 'Service Runtime Timestamp', ['servicename', 'hostname'], registry=registry)
+        snmpGauge = Gauge('interface_statistics', 'Interface Statistics',
+                          ['ifDescr', 'ifType', 'ifAlias', 'hostname', 'Key'], registry=registry)
+        macState = Info("mac_table_info", "Mac Address Table", labelnames=["vlan", "hostname"], registry=registry)
         if not output:
             return
         for devname, devout in output.items():
@@ -129,18 +148,16 @@ class Frontend(Authorize):
                 runtimeInfo.labels(**{'servicename': 'SNMPMonitoring', 'hostname': devname}).set(devout['snmp_scan_runtime'])
                 self.logger.info('SNMP Scan Runtime is older than 5 mins. Something wrong with SNMPRuntime Thread')
                 return
-            snmpGauge = Gauge('interface_statistics', 'Interface Statistics', ['ifDescr', 'ifType', 'ifAlias', 'hostname', 'Key'], registry=registry)
             for hostname, vals in devout.items():
                 if hostname == 'snmp_scan_runtime':
-                    runtimeInfo.labels(**{'servicename': 'SNMPMonitoring', 'hostname': hostname}).set(vals)
+                    runtimeInfo.labels(**{'servicename': 'SNMPMonitoring', 'hostname': devname}).set(vals)
                     continue
-                for _idincr, val in vals.items():
-                    keys = {'ifDescr': val.get('ifDescr', ''), 'ifType': val.get('ifType', ''), 'ifAlias': val.get('ifAlias', ''), 'hostname': hostname}
-                    for key1, val1 in val.items():
-                        if isValFloat(val1):
-                            keys['Key'] = key1
-                            snmpGauge.labels(**keys).set(val1)
-                # TODO Add mac addresses to prometheus output
+                for mkey, val in vals.items():
+                    # Add mac info
+                    if mkey == 'vlans':
+                        self.__addMacInfo(val, devname, macState)
+                    else:
+                        self.__addGeneralInfo(val, devname, snmpGauge)
 
     def maincall(self, environ, start_response):
         """Main call for WSGI"""
@@ -151,7 +168,7 @@ class Frontend(Authorize):
         except Exception as ex:
             start_response('401 Unauthorized', self.headers)
             return [bytes(f'Unauthorized access. {str(ex)}', "UTF-8")]
-        if environ['PATH_INFO'] == '/metrics':
+        if environ['SCRIPT_URL'] == '/metrics':
             start_response('200 OK', self.headers)
             return self.metrics()
         start_response('404 Not Found', self.headers)
