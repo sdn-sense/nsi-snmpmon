@@ -28,7 +28,17 @@ class Authorize():
         self.config = config
         self.logger = logger
         self.allowedCerts = []
+        self.allowedUrls = {}
         self.loadAuthorized()
+        self.generateUrls()
+
+    def generateUrls(self):
+        """Generate supported urls"""
+        if not self.config.get('snmpMon', {}):
+            self.logger.error("No devices to monitor")
+            return
+        for device in self.config.get('snmpMon', {}).keys():
+            self.allowedUrls[f"/{device}/metrics"] = device
 
     def loadAuthorized(self):
         """Load all authorized users for FE from git."""
@@ -86,10 +96,10 @@ class Frontend(Authorize):
                         ('Pragma', 'no-cache'), ('Expires', '0'), ('Content-Type', 'text/plain')]
         Authorize.__init__(self, self.config, self.logger)
 
-    def metrics(self):
+    def metrics(self, host = None):
         """Return metrics view"""
         registry = self.__cleanRegistry()
-        self.__getSNMPData(registry)
+        self.__getSNMPData(registry, host)
         data = generate_latest(registry)
         return iter([data])
 
@@ -128,7 +138,7 @@ class Frontend(Authorize):
                 keys['Key'] = key1
                 snmpGauge.labels(**keys).set(val1)
 
-    def __getSNMPData(self, registry):
+    def __getSNMPData(self, registry, host = None):
         """Add SNMP Data to prometheus output"""
         # Here get info from DB for switch snmp details
         output = self.__getLatestOutput()
@@ -139,6 +149,8 @@ class Frontend(Authorize):
         if not output:
             return
         for devname, devout in output.items():
+            if host and devname == host:
+                continue
             if 'snmp_scan_runtime' not in devout:
                 runtimeInfo.labels(**{'servicename': 'SNMPMonitoring', 'hostname': devname}).set(0)
                 self.logger.info('SNMP Scan Runtime does not have runtime details. Something wrong with SNMPRuntime Thread')
@@ -171,5 +183,8 @@ class Frontend(Authorize):
         if environ['SCRIPT_URL'] == '/metrics':
             start_response('200 OK', self.headers)
             return self.metrics()
+        if environ['SCRIPT_URL'] in self.allowedUrls:
+            start_response('200 OK', self.headers)
+            return self.metrics(self.allowedUrls[environ['SCRIPT_URL']])
         start_response('404 Not Found', self.headers)
         return iter([b'Not Found'])
