@@ -10,12 +10,11 @@ Changes applied to this code:
 import sys
 from SNMPMon.daemonizer import Daemon
 from SNMPMon.daemonizer import getParser
-from SNMPMon.utilities import getConfig
-from SNMPMon.webserver import HTTPExpose
+from SNMPMon.multiworker import MultiWorker
 
 
-COMPONENT = 'WebServer'
-DESCRIPTION = "WebServer exposes metrics in prometheus format"
+COMPONENT = 'MultiWorker'
+DESCRIPTION = "MultiWorker responsible for starting SNMPMonitoring for each device"
 DAEMON = None
 
 class MyDaemon(Daemon):
@@ -24,7 +23,7 @@ class MyDaemon(Daemon):
     def getThreads(self):
         """Multi threading. Allow multiple sites under single FE"""
         outThreads = {}
-        thr = HTTPExpose(self.config, self.logger)
+        thr = MultiWorker(self.config, self.logger)
         outThreads['General'] = thr
         return outThreads
 

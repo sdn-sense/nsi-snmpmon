@@ -29,8 +29,8 @@ def getParser(description):
                          help="Log to stdout and not to file. Default false")
     oparser.add_argument('--onetimerun', action='store_true',
                          help="Run once and exit from loop (Only for start). Default false")
-    oparser.add_argument('--noreporting', action='store_true',
-                         help="Do not report service Status to FE (Only for start/restart). Default false")
+    oparser.add_argument('--devicename', dest='devicename', default='',
+                         help='Device name to start the process. Only for threading.')
     oparser.set_defaults(logtostdout=False)
     return oparser
 
@@ -49,7 +49,9 @@ class Daemon():
         self.component = component
         self.inargs = inargs
         self.runCount = 0
-        self.pidfile = f'/tmp/end-site-rm-{component}.pid'
+        self.pidfile = f'/tmp/nsi-snmpmon-{component}.pid'
+        if self.inargs.devicename:
+            self.pidfile = f'/tmp/nsi-snmpmon-{component}-{self.inargs.devicename}.pid'
         self.config = getConfig('/etc/snmp-mon.yaml')
         self.logger = getTimeRotLogger(**self.config['logParams'])
 

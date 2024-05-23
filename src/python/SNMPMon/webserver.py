@@ -8,38 +8,29 @@ Authors:
 Date: 2022/11/21
 """
 import os
+import os.path
 import time
 from prometheus_client import generate_latest, CollectorRegistry
-from prometheus_client import Enum, Info, CONTENT_TYPE_LATEST
 from prometheus_client import Gauge
-import cherrypy
-from SNMPMon.utilities import getConfig
 from SNMPMon.utilities import getTimeRotLogger
 from SNMPMon.utilities import getFileContentAsJson
 from SNMPMon.utilities import isValFloat
 from SNMPMon.utilities import getUTCnow
-
-class HTTPExpose():
-    def __init__(self, config, logger=None):
-        super().__init__()
-        self.config = config
-        self.logger = getTimeRotLogger(**config['logParams'])
-
-    def startwork(self):
-        """Start Cherrypy Worker"""
-        cherrypy.server.socket_host = '0.0.0.0'
-        cherrypy.quickstart(CherryPyThread(self.config, self.logger))
+from SNMPMon.utilities import getConfig
 
 
-class CherryPyThread():
-    def __init__(self, config, logger):
-        self.config = config
-        self.logger = logger
+class Frontend():
 
-    @cherrypy.expose
-    def index(self):
-        """Index Page"""
-        return "Hello world!. Looking for something? :)"
+    def __init__(self):
+        self.config = getConfig('/etc/snmp-mon.yaml')
+        self.logger = getTimeRotLogger(**self.config.get('logParams', {}))
+
+    def metrics(self):
+        """Return metrics view"""
+        registry = self.__cleanRegistry()
+        self.__getSNMPData(registry)
+        data = generate_latest(registry)
+        return iter([data])
 
     @staticmethod
     def __cleanRegistry():
@@ -56,7 +47,7 @@ class CherryPyThread():
                 if out:
                     return out
             except Exception as ex:
-                self.logger.debug('Got Exception: %s' % ex)
+                self.logger.debug(f'Got Exception: {ex}')
             retryCount += 1
             time.sleep(0.2)
         return {}
@@ -128,24 +119,3 @@ class CherryPyThread():
                         keys['Key'] = key1
                         if self.__includeFilter(keys):
                             snmpGauge.labels(**keys).set(val[key1])
-
-    def __metrics(self):
-        """Return all available Hosts, where key is IP address."""
-        registry = self.__cleanRegistry()
-        self.__getSNMPData(registry)
-        data = generate_latest(registry)
-        return iter([data])
-
-    @cherrypy.expose
-    def prometheus(self):
-        """Return prometheus stats."""
-        return self.__metrics()
-
-
-
-if __name__ == '__main__':
-    print("WARNING: Use this only for development!")
-    config = getConfig('/etc/snmp-mon.yaml')
-    cherrypy.server.socket_host = '0.0.0.0'
-    httpStart = HTTPExpose(config)
-    httpStart.startwork()

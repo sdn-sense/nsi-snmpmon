@@ -10,8 +10,7 @@ Changes applied to this code:
 import sys
 from SNMPMon.daemonizer import Daemon
 from SNMPMon.daemonizer import getParser
-from SNMPMon.utilities import getConfig
-from SNMPMon.snmpmon import SNMPMonitoring 
+from SNMPMon.snmpmon import SNMPMonitoring
 
 
 COMPONENT = 'SNMPMonitoring'
@@ -23,8 +22,11 @@ class MyDaemon(Daemon):
 
     def getThreads(self):
         """Multi threading. Allow multiple sites under single FE"""
+        if not self.inargs.devicename:
+            self.logger.error("Device name is not provided. Exiting")
+            sys.exit(1)
         outThreads = {}
-        thr = SNMPMonitoring(self.config, self.logger)
+        thr = SNMPMonitoring(self.config, self.inargs.devicename, self.logger)
         outThreads['General'] = thr
         return outThreads
 

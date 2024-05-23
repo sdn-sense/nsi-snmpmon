@@ -24,6 +24,13 @@ outcopies: 10
 # Specify all as needed for each switch.
 snmpMon:
   dellos9_s0:
+    # network_os is Optional - only used for mac parsing. If not specified, will use default OID/MIBs.
+    # The only special known case right now is sonic, which needs to be specified. For Sonic - use 'sonic'
+    #network_os: sonic
+    # macoverride is Optional and only for testing - only used for mac parsing MIB/OID override.
+    # macoverride: '
+    #  mib: 'mib-2.17.7.1.2.2.1.3.'
+    #  oid: '1.3.6.1.2.1.17.7.1.2.2.1.3'
     snmpParams:
         community: mgmt_hep
         hostname: 172.16.1.1

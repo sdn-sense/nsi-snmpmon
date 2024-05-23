@@ -43,7 +43,7 @@ def evaldict(inputDict):
     except ValueError:
         out = json.loads(inputDict)
     except SyntaxError as ex:
-        raise Exception(f'Got Syntax Error: {ex}')
+        raise Exception(f'Got Syntax Error: {ex}') from ex
     return out
 
 def getFileContentAsJson(inputFile):
@@ -58,9 +58,9 @@ def getFileContentAsJson(inputFile):
                 out = evaldict(fd.read())
     return out
 
-def dumpFileContentAsJson(config, content):
+def dumpFileContentAsJson(config, name, content):
     """Dump File content with locks."""
-    filename = os.path.join(config['tmpdir'], 'snmp-out-%s.json' % getUTCnow())
+    filename = os.path.join(config['tmpdir'], f'snmp-{name}-{getUTCnow()}.json')
     tmpoutFile = filename + '.tmp'
     with open(tmpoutFile, 'w+', encoding='utf-8') as fd:
         json.dump(content, fd)
@@ -107,3 +107,24 @@ def getTimeRotLogger(**kwargs):
         logger.addHandler(handler)
     logger.setLevel(LEVELS[kwargs.get('logLevel', 'DEBUG')])
     return logger
+
+def keyMacMappings(network_os):
+    """Key/Mac mapping for MAC monitoring"""
+    default = {"oid": "1.3.6.1.2.1.17.7.1.2.2.1.3", "mib": "mib-2.17.7.1.2.2.1.3."}
+    mappings = {
+        "sonic": {
+            "oid": "1.3.6.1.2.1.17.7.1.2.2.1.2",
+            "mib": "mib-2.17.7.1.2.2.1.2.",
+        }
+    }
+    if network_os in mappings:
+        return mappings[network_os]
+    return default
+
+def overrideMacMappings(config, mappings):
+    """Override Mac mappings"""
+    if 'oid' in config:
+        mappings['oid'] = config['oid']
+    if 'mib' in config:
+        mappings['mib'] = config['mib']
+    return mappings

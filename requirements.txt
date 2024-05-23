@@ -3,4 +3,4 @@ prometheus-client
 easysnmp
 PyYAML
 psutil
-cherrypy
+mod-wsgi

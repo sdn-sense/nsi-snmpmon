@@ -12,7 +12,7 @@ from setupUtilities import get_py_modules, VERSION
 # Also another cronjob, which monitors config file and modifies cronjobs if needed.
 # Currently it is allowed to specify only minutes and up to 30 minutes.
 # This is how CRONJOBS are handled and division is done only for the current hour.
-SCRIPTS = ["packaging/SNMPMonitoring", "packaging/WebServer"]
+SCRIPTS = ["packaging/SNMPMonitoring", "packaging/MultiWorker"]
 
 setup(
     name='SNMPMon',
@@ -26,7 +26,11 @@ setup(
     package_dir={'': 'src/python/'},
     packages=['SNMPMon'],
     install_requires=[],
-    data_files=[],
+    data_files=[("/var/www/wsgi-scripts/", ["packaging/apache/snmpmon.wsgi"]),
+                ("/etc/httpd/conf.d/", ["packaging/apache/snmpmon-httpd.conf",
+                                        "packaging/apache/welcome.conf"]),
+                ("/etc/cron.d/", ["packaging/cron.d/fetch-crl",
+                                  "packaging/cron.d/fetch-crl-reboot"])],
     py_modules=get_py_modules(['src/python/SNMPMon/']),
     scripts=SCRIPTS
 )
