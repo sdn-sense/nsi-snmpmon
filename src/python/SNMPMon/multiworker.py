@@ -15,6 +15,7 @@ import shlex
 from SNMPMon.utilities import getTimeRotLogger
 from SNMPMon.utilities import getFileContentAsJson
 from SNMPMon.utilities import dumpFileContentAsJson
+from SNMPMon.utilities import moveFile
 
 
 def externalCommand(command, communicate=True):
@@ -71,6 +72,7 @@ class MultiWorker():
                 self.logger.debug(f'Got Exception: {ex}')
         return dumpFileContentAsJson(self.config, 'multiworker', out)
 
+
     def startwork(self):
         """Multiworker main process"""
         # Read config and for each device start SNMPMonitoring supervisord process
@@ -92,6 +94,8 @@ class MultiWorker():
                 self.logger.info(f"Restarting SNMPMonitoring for {device} - {retOut}")
                 continue
         # join all output files to a single file
-        self._latestOutput()
+        newFName = self._latestOutput()
+        latestFName = os.path.join(self.config['tmpdir'], 'snmp-multiworker-latest.json')
+        moveFile(latestFName, newFName)
         # Mark as not first run, so if service stops, it uses restart
         self.firstRun = False

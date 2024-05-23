@@ -30,7 +30,11 @@ setup(
                 ("/etc/httpd/conf.d/", ["packaging/apache/snmpmon-httpd.conf",
                                         "packaging/apache/welcome.conf"]),
                 ("/etc/cron.d/", ["packaging/cron.d/fetch-crl",
-                                  "packaging/cron.d/fetch-crl-reboot"])],
+                                  "packaging/cron.d/fetch-crl-reboot"]),
+                ("/etc/", ["packaging/etc/supervisord.conf",
+                           "config/snmp-mon.yaml"]),
+                ("/etc/supervisord.d/", ["packaging/etc/supervisord.d/01-multiworker.conf",
+                                         "packaging/etc/supervisord.d/10-apache.conf",])],
     py_modules=get_py_modules(['src/python/SNMPMon/']),
     scripts=SCRIPTS
 )

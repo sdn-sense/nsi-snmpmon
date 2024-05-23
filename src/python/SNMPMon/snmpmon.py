@@ -19,6 +19,7 @@ from SNMPMon.utilities import getTimeRotLogger
 from SNMPMon.utilities import dumpFileContentAsJson
 from SNMPMon.utilities import getUTCnow
 from SNMPMon.utilities import keyMacMappings, overrideMacMappings
+from SNMPMon.utilities import moveFile
 
 class SNMPMonitoring():
     """SNMP Monitoring Class"""
@@ -28,26 +29,8 @@ class SNMPMonitoring():
         self.logger = logger if logger else getTimeRotLogger(**config['logParams'])
         self.hostname = hostname
 
-    def _cleanOldCopies(self, ignoreList=None):
-        self.logger.info('Start check of old files')
-        allfiles = os.listdir(self.config['tmpdir'])
-        if len(allfiles) <= self.config.get('outcopies', 10):
-            return
-        while len(allfiles) >= self.config.get('outcopies', 10):
-            fName = allfiles.pop(0)
-            fileRemove = os.path.join(self.config['tmpdir'], fName)
-            if ignoreList and fileRemove in ignoreList:
-                continue
-            os.remove(fileRemove)
-            self.logger.info(f'File {fileRemove} removed. Old.')
-
     def _writeOutFile(self, out):
         return dumpFileContentAsJson(self.config, self.hostname, out)
-
-    def _linkNewFile(self, dstFile, srcFile):
-        if os.path.isfile(dstFile):
-            os.unlink(dstFile)
-        os.symlink(srcFile, dstFile)
 
     def __includeFilter(self, key, val):
         """
@@ -142,9 +125,7 @@ class SNMPMonitoring():
         jsonOut['snmp_scan_runtime'] = getUTCnow()
         newFName = self._writeOutFile(jsonOut)
         latestFName = os.path.join(self.config['tmpdir'], f'snmp-{self.hostname}-latest.json')
-        ignoreList = [newFName, latestFName]
-        self._linkNewFile(latestFName, newFName)
-        self._cleanOldCopies(ignoreList=ignoreList)
+        moveFile(latestFName, newFName)
         if err:
             raise Exception(f'SNMP Monitoring Errors: {err}')
 

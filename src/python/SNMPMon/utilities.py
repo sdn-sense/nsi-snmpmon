@@ -9,6 +9,7 @@ Date: 2023/01/10
 import os
 import ast
 import time
+import shutil
 import datetime
 import logging
 import logging.handlers
@@ -60,12 +61,18 @@ def getFileContentAsJson(inputFile):
 
 def dumpFileContentAsJson(config, name, content):
     """Dump File content with locks."""
-    filename = os.path.join(config['tmpdir'], f'snmp-{name}-{getUTCnow()}.json')
+    if not os.path.isdir(config['tmpdir']):
+        os.makedirs(config['tmpdir'])
+    filename = os.path.join(config['tmpdir'], f'snmp-{name}.json')
     tmpoutFile = filename + '.tmp'
     with open(tmpoutFile, 'w+', encoding='utf-8') as fd:
         json.dump(content, fd)
     shutil.move(tmpoutFile, filename)
     return filename
+
+def moveFile(dstFile, srcFile):
+    """Move file from src to dst."""
+    shutil.move(srcFile, dstFile)
 
 def getConfig(filename):
     """Get Config file"""
