@@ -145,7 +145,7 @@ class Frontend(Authorize):
         runtimeInfo = Gauge('service_runtime_timestamp', 'Service Runtime Timestamp', ['servicename', 'hostname'], registry=registry)
         snmpGauge = Gauge('interface_statistics', 'Interface Statistics',
                           ['ifDescr', 'ifType', 'ifAlias', 'hostname', 'Key'], registry=registry)
-        macState = Info("mac_table_info", "Mac Address Table", labelnames=["vlan", "hostname"], registry=registry)
+        macState = Info("mac_table", "Mac Address Table", labelnames=["vlan", "hostname"], registry=registry)
         if not output:
             return
         for devname, devout in output.items():
