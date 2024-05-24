@@ -149,7 +149,7 @@ class Frontend(Authorize):
         if not output:
             return
         for devname, devout in output.items():
-            if host and devname == host:
+            if host and devname != host:
                 continue
             if 'snmp_scan_runtime' not in devout:
                 runtimeInfo.labels(**{'servicename': 'SNMPMonitoring', 'hostname': devname}).set(0)
