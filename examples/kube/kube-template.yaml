@@ -1,0 +1,265 @@
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: letsencrypt
+  namespace: opennsa
+spec:
+  acme:
+    email: juztas@gmail.com
+    preferredChain: ""
+    privateKeySecretRef:
+      name: issuer-account-key
+    server: https://acme-v02.api.letsencrypt.org/directory
+    solvers:
+    - http01:
+        ingress:
+          class: haproxy
+          ingressTemplate:
+            metadata:
+              annotations:
+                ingress.kubernetes.io/ssl-redirect: "false"
+          serviceType: ClusterIP
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  annotations:
+  name: cert-nsi-snmpmon-prpdev
+  namespace: opennsa
+spec:
+  commonName: nsi-snmpmon-prpdev.nrp-nautilus.io
+  dnsNames:
+  - nsi-snmpmon-prpdev.nrp-nautilus.io
+  issuerRef:
+    kind: Issuer
+    name: letsencrypt
+  secretName: cert-nsi-snmpmon-prpdev
+---
+apiVersion: v1
+data:
+  snmp-mon.yaml: |
+    ---
+    # Log Parameters, You dont need to change this (unless directed)
+    logParams:
+      logFile: '/opt/snmpmon/logfile.log'
+      logLevel: 'DEBUG'
+      rotateTime: 'midnight'
+      backupCount: 5
+
+    # TMP Dir to save output from SNMP in json format;
+    tmpdir: '/opt/snmpmon/output/'
+
+
+    # Whicch clients to allow to access the API
+    # For autogole monitoring to be able to access the API, add the following to the list:
+    # /C=US/ST=California/L=Pasadena/O=Caltech/CN=sdn-sense.dev/C=US/ST=California/L=Pasadena/O=Caltech/CN=autogole-grafana-prometheus.ultralight.org
+    authorize_dns:
+      - "/C=US/ST=California/L=Pasadena/O=Caltech/CN=sdn-sense.dev/C=US/ST=California/L=Pasadena/O=Caltech/CN=autogole-grafana-prometheus.ultralight.org"
+      - "/C=US/O=Let's Encrypt/CN=R3/CN=nsi-snmpmon-prpdev.nrp-nautilus.io"
+      - "/DC=ch/DC=cern/CN=CERN Grid Certification Authority/DC=ch/DC=cern/OU=Organic Units/OU=Users/CN=jbalcas/CN=751133/CN=Justas Balcas"
+    # For snmpParams - see here for accepted keys:
+    # https://easysnmp.readthedocs.io/en/latest/session_api.html
+    # It covers pretty much all needed features for v1,v2,v3
+    # Specify all as needed for each switch.
+    snmpMon:
+      edgecore_s0:
+        # network_os is Optional - only used for mac parsing. If not specified, will use default OID/MIBs.
+        # The only special known case right now is sonic, which needs to be specified. For Sonic - use 'sonic'
+        network_os: sonic
+        # macoverride is Optional and only for testing - only used for mac parsing MIB/OID override.
+        # macoverride: '
+        #  mib: 'mib-2.17.7.1.2.2.1.3.'
+        #  oid: '1.3.6.1.2.1.17.7.1.2.2.1.3'
+        snmpParams:
+            community: public
+            hostname: 1.2.3.4
+            version: 2
+      sn3700_s0:
+        # network_os is Optional - only used for mac parsing. If not specified, will use default OID/MIBs.
+        # The only special known case right now is sonic, which needs to be specified. For Sonic - use 'sonic'
+        network_os: sonic
+        # macoverride is Optional and only for testing - only used for mac parsing MIB/OID override.
+        # macoverride: '
+        #  mib: 'mib-2.17.7.1.2.2.1.3.'
+        #  oid: '1.3.6.1.2.1.17.7.1.2.2.1.3'
+        snmpParams:
+            community: public
+            hostname: 4.3.2.1
+            version: 2
+
+    # Filter is configured for each host.
+    # Allowed operators:
+    # and - means all filters defined must evaluate to True and match
+    # or - means any one filter must evaluate to True.
+
+    # filter keys,value available (can be string, will compare match, or if list, will see if val is in list):
+    # KEY - VALS
+    # Key - these are the keys queried and accessed by snmp query: 'ifDescr', 'ifType', 'ifMtu', 'ifAdminStatus', 'ifOperStatus','ifHighSpeed', 'ifAlias', 'ifHCInOctets', 'ifHCOutOctets', 'ifInDiscards', 'ifOutDiscards', 'ifInErrors', 'ifOutErrors', 'ifHCInUcastPkts', 'ifHCOutUcastPkts', 'ifHCInMulticastPkts', 'ifHCOutMulticastPkts', 'ifHCInBroadcastPkts', 'ifHCOutBroadcastPkts'
+    # hostname - will be same as hostname defined (no need to check, as it checks before)
+    # ifAlias - Interface or Vlan Description
+    # ifDescr - Interface or Vlan Name
+    # ifType - Interface Type
+
+    # Few examples:
+    # Filter rules below check, that hostname is dellos9_s0 and include ALL stats, if Key == 'ifAdminStatus' and ifDescr is in this list ["Port-channel 103", "hundredGigE 1/3"].
+    # This filter will include ONLY ifAdminStatus for Ports: "Port-channel 103", "hundredGigE 1/3"
+    #filterRules:
+    #  dellos9_s0:
+    #    operator: 'and'
+    #    filters:
+    #      Key: 'ifAdminStatus'
+    #      ifDescr: ["Port-channel 103", "hundredGigE 1/3"]
+
+    # Filter rules below check, that hostname is dellos9_s0 and include ANY stats, if Key == 'ifAdminStatus' or ifDescr is in this list ["Port-channel 103", "hundredGigE 1/3"].
+    # This filter will include ALL Interfaces ifAdminStatus AND ALL Keys for interfaces in "Port-channel 103", "hundredGigE 1/3"
+    #filterRules:
+    #  dellos9_s0:
+    #    operator: 'or'
+    #    filters:
+    #      Key: 'ifAdminStatus'
+    #      ifDescr: ["Port-channel 103", "hundredGigE 1/3"]
+    #filterRules:
+    #  dellos9_s0:
+    #    operator: 'and'
+    #    filters:
+    #      ifDescr: ["Port-channel 103", "hundredGigE 1/3", "hundredGigE 1/10", "hundredGigE 1/11", "hundredGigE 1/12", "hundredGigE 1/23", "hundredGigE 1/31", "hundredGigE 1/32", "fortyGigE 1/30/1", 'Vlan 1779', 'Vlan 1780', 'Vlan 1781', 'Vlan 1782', 'Vlan 1783', 'Vlan 1784', 'Vlan 1785', 'Vlan 1786', 'Vlan 1787', 'Vlan 1788', 'Vlan 1789', 'Vlan 1790', 'Vlan 1791', 'Vlan 1792', 'Vlan 1793', 'Vlan 1794', 'Vlan 1795', 'Vlan 1796', 'Vlan 1797', 'Vlan 1798', 'Vlan 1799', 'Vlan 3600', 'Vlan 3601', 'Vlan 3602', 'Vlan 3603', 'Vlan 3604', 'Vlan 3605', 'Vlan 3606', 'Vlan 3607', 'Vlan 3608', 'Vlan 3609', 'Vlan 3610', 'Vlan 3611', 'Vlan 3612', 'Vlan 3613', 'Vlan 3614', 'Vlan 3615', 'Vlan 3616', 'Vlan 3617', 'Vlan 3618', 'Vlan 3619', 'Vlan 3985', 'Vlan 3986', 'Vlan 3987', 'Vlan 3988', 'Vlan 3989', 'Vlan 3870', 'Vlan 3871', 'Vlan 3872', 'Vlan 3873', 'Vlan 3874', 'Vlan 3875', 'Vlan 3876', 'Vlan 3877', 'Vlan 3878', 'Vlan 3879', 'Vlan 3880', 'Vlan 3881', 'Vlan 3882', 'Vlan 3883', 'Vlan 3911', 'Vlan 3912', 'Vlan 3870', 'Vlan 3871', 'Vlan 3872', 'Vlan 3873', 'Vlan 3874', 'Vlan 3875', 'Vlan 3876', 'Vlan 3877', 'Vlan 3878', 'Vlan 3879', 'Vlan 3880', 'Vlan 3881', 'Vlan 3882', 'Vlan 3883']
+kind: ConfigMap
+metadata:
+  creationTimestamp: null
+  name: snmpmon-prpdev
+  namespace: opennsa
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    k8s-app: nsi-snmpmon
+  name: nsi-snmpmon
+  namespace: opennsa
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      k8s-app: nsi-snmpmon
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        k8s-app: nsi-snmpmon
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - k8s-igrok-01.calit2.optiputer.net
+                - k8s-igrok-02.calit2.optiputer.net
+                - k8s-igrok-03.calit2.optiputer.net
+                - k8s-igrok-04.calit2.optiputer.net
+                - k8s-igrok-05.calit2.optiputer.net
+                - k8s-igrok-06.calit2.optiputer.net
+      containers:
+      - image: sdnsense/nsi-snmpmon:latest
+        imagePullPolicy: Always
+        env:
+        - name: LISTEN_SNMPMON_PORT
+          value: "8443"
+        name: nsi-snmpmon
+        ports:
+          - containerPort: 8443
+            protocol: TCP
+        resources:
+          limits:
+            cpu: "1"
+            memory: 1Gi
+          requests:
+            cpu: "1"
+            memory: 1Gi
+        volumeMounts:
+        - mountPath: /etc/snmp-mon.yaml
+          name: snmpmon-prpdev
+          subPath: snmp-mon.yaml
+        - mountPath: /etc/httpd/certs/cert.pem
+          name: cert-nsi-snmpmon-prpdev
+          readOnly: true
+          subPath: cert.pem
+        - mountPath: /etc/httpd/certs/privkey.pem
+          name: cert-nsi-snmpmon-prpdev
+          readOnly: true
+          subPath: privkey.pem
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      volumes:
+      - name: snmpmon-prpdev
+        configMap:
+          name: snmpmon-prpdev
+          defaultMode: 420
+          items:
+          - key: snmp-mon.yaml
+            path: snmp-mon.yaml
+      - name: cert-nsi-snmpmon-prpdev
+        secret:
+          defaultMode: 420
+          items:
+          - key: tls.crt
+            path: cert.pem
+          - key: tls.key
+            path: privkey.pem
+          secretName: cert-nsi-snmpmon-prpdev
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: opennsa
+  labels:
+    k8s-app: nsi-snmpmon
+  name: nsi-snmpmon
+spec:
+  ports:
+  - port: 8443
+    protocol: TCP
+    targetPort: 8443
+    name: https
+  selector:
+    k8s-app: nsi-snmpmon
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  namespace: opennsa
+  annotations:
+    kubernetes.io/ingress.class: haproxy
+    haproxy-ingress.github.io/ssl-passthrough: "true"
+  name: nsi-snmpmon
+spec:
+  rules:
+  - host: nsi-snmpmon-prpdev.nrp-nautilus.io
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nsi-snmpmon
+            port:
+              number: 8443
+  tls:
+  - hosts:
+    - nsi-snmpmon-prpdev.nrp-nautilus.io
+    secretName: cert-nsi-snmpmon-prpdev
