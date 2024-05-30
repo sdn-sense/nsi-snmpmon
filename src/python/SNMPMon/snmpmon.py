@@ -21,7 +21,42 @@ from SNMPMon.utilities import getUTCnow
 from SNMPMon.utilities import keyMacMappings, overrideMacMappings
 from SNMPMon.utilities import moveFile
 
-class SNMPMonitoring():
+
+class Overrides():
+    """Overrides Class"""
+    def __init__(self):
+        pass
+
+    def _ifDescrSonic(self, session, out):
+        """Override ifDescr for SONiC"""
+        oids = {}
+        for key in out.keys():
+            val = 1000000000 + (int(key)*100)
+            oids["mib-2.47.1.1.1.1.7." + str(val)] = key
+
+        newNames = session.walk('1.3.6.1.2.1.47.1.1.1.1.7.')
+        for item in newNames:
+            if item.oid in oids:
+                out[oids[item.oid]].setdefault('ifAlias', '')
+                out[oids[item.oid]].setdefault('ifDescr', '')
+                tmpVal = out[oids[item.oid]]['ifDescr']
+                out[oids[item.oid]]['ifDescr'] = item.value
+                out[oids[item.oid]]['ifAlias'] += tmpVal
+        return out
+
+    def callOverrides(self, session, out):
+        """Check if override param defined. So far only special case for SONiC"""
+        # check if customOverride is defined and call based on name
+        import pdb; pdb.set_trace()
+        if 'customOverride' in self.config['snmpMon'][self.hostname]:
+            if self.config['snmpMon'][self.hostname]['customOverride'] == 'ifDescrSonic':
+                return self._ifDescrSonic(session, out)
+        return out
+
+
+
+
+class SNMPMonitoring(Overrides):
     """SNMP Monitoring Class"""
     def __init__(self, config, hostname, logger=None):
         super().__init__()
@@ -120,6 +155,7 @@ class SNMPMonitoring():
                 self.logger.warning(f'Got SNMP Timeout Exception: {ex}')
                 err.append(ex)
                 continue
+        out = self.callOverrides(session, out)
         jsonOut[self.hostname] = out
         jsonOut['macs'] = self.scanMacAddresses(session)
         jsonOut['snmp_scan_runtime'] = getUTCnow()

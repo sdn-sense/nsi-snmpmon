@@ -28,6 +28,11 @@ snmpMon:
     # macoverride: '
     #  mib: 'mib-2.17.7.1.2.2.1.3.'
     #  oid: '1.3.6.1.2.1.17.7.1.2.2.1.3'
+    # customOverride - special functions for modifying out. For example, SONiC returns etp1, etp2 as interface
+    # name in snmp output, but any controls (via SENSE) are done using EthernetXX. One way to map it back - 
+    # is to use special function which takes SNMPv2-SMI::mib-2.47.1.1.1.1.7 and replaces etp1 to EthernetXX. 
+    # and old etp1 goes into ifAlias (as description)
+    # customOverride: 'ifDescrSonic'
     snmpParams:
         community: mgmt_hep
         hostname: 172.16.1.1
