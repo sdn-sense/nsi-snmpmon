@@ -47,7 +47,6 @@ class Overrides():
     def callOverrides(self, session, out):
         """Check if override param defined. So far only special case for SONiC"""
         # check if customOverride is defined and call based on name
-        import pdb; pdb.set_trace()
         if 'customOverride' in self.config['snmpMon'][self.hostname]:
             if self.config['snmpMon'][self.hostname]['customOverride'] == 'ifDescrSonic':
                 return self._ifDescrSonic(session, out)
