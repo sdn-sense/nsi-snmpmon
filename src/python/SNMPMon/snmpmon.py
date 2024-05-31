@@ -53,8 +53,6 @@ class Overrides():
         return out
 
 
-
-
 class SNMPMonitoring(Overrides):
     """SNMP Monitoring Class"""
     def __init__(self, config, hostname, logger=None):

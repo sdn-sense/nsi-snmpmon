@@ -23,7 +23,7 @@ from SNMPMon.utilities import getConfig
 
 
 class Authorize():
-
+    """Authorize class for SNMPMon. Authorize users based on certificate."""
     def __init__(self, config, logger):
         self.config = config
         self.logger = logger
@@ -126,8 +126,10 @@ class Frontend(Authorize):
     def __addMacInfo(self, macVals, devname, macState):
         """Add Mac Info to prometheus output"""
         for vlan, macs in macVals.items():
+            incr = 0
             for mac in macs:
-                macState.labels(**{'vlan': vlan, 'hostname': devname}).info({'macaddress': mac})
+                macState.labels(**{'vlan': vlan, 'hostname': devname, 'incr': str(incr)}).info({'macaddress': mac})
+                incr += 1
 
     def __addGeneralInfo(self, val, devname, snmpGauge):
         """Add General Info to prometheus output"""
