@@ -15,6 +15,13 @@ authorize_dns:
 # TMP Dir to save output from SNMP in json format.
 tmpdir: '/opt/snmpmon/output/'
 
+# http dir to save requests from external services (used only for ESnet monitoring)
+httpdir: '/opt/httprequests/'
+
+# Elastic Search Parameters (host and index). This is only applicable for ESnet monitoring.
+es_host: 'https://esnet.public.startdust.endpoint:9200'
+es_index: 'es_index_to_use_to_query'
+
 # For snmpParams - see here for accepted keys:
 # https://easysnmp.readthedocs.io/en/latest/session_api.html
 # It covers pretty much all needed features for v1,v2,v3

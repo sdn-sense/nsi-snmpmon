@@ -58,11 +58,14 @@ def getFileContentAsJson(inputFile):
                 out = evaldict(fd.read())
     return out
 
-def dumpFileContentAsJson(config, name, content):
+def dumpFileContentAsJson(config, name, content, fullpath=False):
     """Dump File content with locks."""
-    if not os.path.isdir(config['tmpdir']):
-        os.makedirs(config['tmpdir'])
-    filename = os.path.join(config['tmpdir'], f'snmp-{name}.json')
+    if fullpath:
+        filename = name
+    else:
+        if not os.path.isdir(config['tmpdir']):
+            os.makedirs(config['tmpdir'])
+        filename = os.path.join(config['tmpdir'], f'snmp-{name}.json')
     tmpoutFile = filename + '.tmp'
     with open(tmpoutFile, 'w+', encoding='utf-8') as fd:
         json.dump(content, fd)
@@ -151,3 +154,17 @@ def overrideMacMappings(config, mappings):
     if 'mib' in config:
         mappings['mib'] = config['mib']
     return mappings
+
+def updatedict(orig, new):
+    """Update dictionary."""
+    for key, val in new.items():
+        if key in orig:
+            if isinstance(val, dict):
+                orig[key] = updatedict(orig[key], val)
+            elif isinstance(val, list):
+                orig[key] += val
+            else:
+                orig[key] = val
+        else:
+            orig[key] = val
+    return orig

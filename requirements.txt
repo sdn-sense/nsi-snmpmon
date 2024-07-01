@@ -4,3 +4,4 @@ easysnmp
 PyYAML
 psutil
 mod-wsgi
+elasticsearch

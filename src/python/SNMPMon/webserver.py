@@ -10,6 +10,7 @@ Date: 2022/11/21
 import os
 import os.path
 import time
+import json
 from datetime import datetime
 from datetime import timezone
 from prometheus_client import generate_latest, CollectorRegistry
@@ -17,6 +18,7 @@ from prometheus_client import Gauge
 from prometheus_client import Info
 from SNMPMon.utilities import getStreamLogger
 from SNMPMon.utilities import getFileContentAsJson
+from SNMPMon.utilities import dumpFileContentAsJson
 from SNMPMon.utilities import isValFloat
 from SNMPMon.utilities import getUTCnow
 from SNMPMon.utilities import getConfig
@@ -103,6 +105,62 @@ class Frontend(Authorize):
         data = generate_latest(registry)
         return iter([data])
 
+    def __getinputdata(self, environ):
+        """Get input data from request"""
+        try:
+            data = environ['wsgi.input'].read(int(environ['CONTENT_LENGTH']))
+            data = data.decode("utf-8")
+            data = json.loads(data)
+            return data
+        except Exception as ex:
+            raise Exception(f"Error: {ex}") from ex
+
+    def __saveRequest(self, data):
+        """Save request to httpdir"""
+        uuid, orchestrator = data.get('uuid', ''), data.get('orchestrator', '')
+        fName = os.path.join(self.config['httpdir'], f"snmpmon-{uuid}-{orchestrator}.json")
+        dumpFileContentAsJson(self.config, fName, data, True)
+
+    def submitCheck(self, environ, start_response):
+        """Check if request is submitted"""
+        try:
+            data = self.__getinputdata(environ)
+            uuid, orchestrator = data.get('uuid', ''), data.get('orchestrator', '')
+            fName = os.path.join(self.config['httpdir'], f"snmpmon-{uuid}-{orchestrator}.json")
+            if os.path.exists(fName):
+                start_response('200 OK', self.headers)
+                return [bytes(f'File {fName} already exists.', "UTF-8")]
+            start_response('404 Not Found', self.headers)
+            return [bytes(f'File {fName} does not exist.', "UTF-8")]
+        except Exception as ex:
+            raise Exception(f"Error: {ex}") from ex
+
+    def submitRequest(self, environ):
+        """Submit request to SNMPMon and save in httpdir"""
+        # Get submitted data and load it as json
+        try:
+            data = self.__getinputdata(environ)
+            self.__saveRequest(data)
+            return [bytes(f'Request submitted successfully. UUID: {data.get("uuid", "")}', "UTF-8")]
+        except Exception as ex:
+            raise Exception(f"Error: {ex}") from ex
+
+    def submitDelete(self, environ, start_response):
+        """Delete submitted request"""
+        try:
+            data = self.__getinputdata(environ)
+            uuid, orchestrator = data.get('uuid', ''), data.get('orchestrator', '')
+            fName = os.path.join(self.config['httpdir'], f"snmpmon-{uuid}-{orchestrator}.json")
+            if os.path.exists(fName):
+                data['stopRun'] = True
+                self.__saveRequest(data)
+                start_response('200 OK', self.headers)
+                return [bytes(f'File {fName} deleted successfully.', "UTF-8")]
+            start_response('404 Not Found', self.headers)
+            return [bytes(f'File {fName} does not exist.', "UTF-8")]
+        except Exception as ex:
+            raise Exception(f"Error: {ex}") from ex
+
     @staticmethod
     def __cleanRegistry():
         """Get new/clean prometheus registry."""
@@ -173,6 +231,21 @@ class Frontend(Authorize):
                     else:
                         self.__addGeneralInfo(val, devname, snmpGauge)
 
+    def _submitRequest(self, environ, start_response):
+        """Submit Request check"""
+        # Accept post method and save to httpdir config location
+        if environ['REQUEST_METHOD'] == 'POST' and environ['SCRIPT_URL'] == '/submit':
+            start_response('200 OK', self.headers)
+            return self.submitRequest(environ)
+        # Allow to check if there is a submitted request
+        if environ['REQUEST_METHOD'] == 'POST' and environ['SCRIPT_URL'] == '/submitcheck':
+            return self.submitCheck(environ, start_response)
+        # Allow to delete submitted request
+        if environ['REQUEST_METHOD'] == 'POST' and environ['SCRIPT_URL'] == '/submitdelete':
+            return self.submitDelete(environ, start_response)
+        start_response('404 Not Found', self.headers)
+        return iter([b'Not Found'])
+
     def maincall(self, environ, start_response):
         """Main call for WSGI"""
         # Certificate must be valid
@@ -185,6 +258,9 @@ class Frontend(Authorize):
         if environ['SCRIPT_URL'] == '/metrics':
             start_response('200 OK', self.headers)
             return self.metrics()
+        # Accept post method and save to httpdir config location
+        if environ['SCRIPT_URL'].startswith('/submit'):
+            self._submitRequest(environ, start_response)
         if environ['SCRIPT_URL'] in self.allowedUrls:
             start_response('200 OK', self.headers)
             return self.metrics(self.allowedUrls[environ['SCRIPT_URL']])
