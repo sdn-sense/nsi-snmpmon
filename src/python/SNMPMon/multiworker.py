@@ -127,8 +127,8 @@ class MultiWorker():
 
     def _startESnetMonitoring(self):
         """Read httpdir config and start ESnet monitoring processes"""
-        if not self.config.get('ESnetConfig', {}):
-            self.logger.error("No ESnet devices to monitor")
+        if not self.config.get('es_host', '') and not self.config.get('es_index', ''):
+            self.logger.error("No ESnet devices to monitor configured.")
             return
         for file in os.listdir(self.config['httpdir']):
             if not file.endswith('.json'):
