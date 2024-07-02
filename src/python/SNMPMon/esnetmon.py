@@ -120,6 +120,7 @@ class ESnetES():
         mapkeys = {"rate_in": "ifHCInOctets", "rate_out": "ifHCOutOctets", "err_in": "ifInErrors",
                    "err_out": "ifOutErrors", "disc_in": "ifInDiscards", "disc_out": "ifOutDiscards"}
         for device, portdata in self.outdata.items():
+            devout = snmpout.setdefault(device, {})
             for port, data in portdata.items():
                 incr += 1
                 tmpd = {"ifDescr": port, "ifType": "6", "ifAlias": port, "hostname": device}
@@ -128,22 +129,24 @@ class ESnetES():
                         sumdata = sum(data[key])
                         countdata = len(data[key])
                         tmpd[mapkey] = str(int(sumdata/countdata))
-                snmpout.setdefault(device, {}).setdefault(str(incr), tmpd)
+                devout.setdefault(device, {}).setdefault(str(incr), tmpd)
                 # Add mac addresses
                 if 'mac_addresses' in data:
                     vlan = self.monports.get('ports', {}).get(device, {}).get(port, -1)
                     if vlan == -1:
                         continue
-                    outdm = snmpout.setdefault('macs', {}).setdefault("vlans", {}).setdefault(str(vlan), [])
+                    outdm = devout.setdefault('macs', {}).setdefault("vlans", {}).setdefault(str(vlan), [])
                     for mac in data['mac_addresses']:
                         if mac not in outdm:
                             outdm.append(mac)
-        snmpout['snmp_scan_runtime'] = getUTCnow()
+            # Set the runtime
+            snmpout.setdefault(device, {}).setdefault('snmp_scan_runtime', getUTCnow())
         pprint.pprint(snmpout)
         return dumpFileContentAsJson(self.config, self.monports['oscarsid'], snmpout)
 
     def startwork(self):
         """Main run"""
+        self.logger.info("Starting ESnet monitoring")
         self._clean()
         # Load file
         devinput = getFileContentAsJson(self.scanfile)
@@ -162,6 +165,7 @@ class ESnetES():
         self.get_dev_data()
         self._writeOutFile()
         if not devinput.get('runinfo', {}):
+            self.logger.info(f"First run finished. dumping data. {devinput}")
             devinput['runinfo'] = self.monports
             devinput['firstRun'] = False
             dumpFileContentAsJson(self.config, self.scanfile, devinput, True)

@@ -172,6 +172,14 @@ class Daemon():
             with open(self.pidfile, 'r', encoding='utf-8') as fd:
                 pid = int(fd.read().strip())
                 print(f'Application info: PID {pid}')
+                # Check if the pid is still running
+                try:
+                    os.kill(pid, 0)
+                    print('Application is running')
+                except (OSError, ProcessLookupError) as ex:
+                    print('Application is not running')
+                    os.remove(self.pidfile)
+                    sys.exit(1)
         except IOError:
             print('Is application running?')
             sys.exit(1)

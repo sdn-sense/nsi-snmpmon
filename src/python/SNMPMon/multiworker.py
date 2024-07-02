@@ -17,6 +17,7 @@ from SNMPMon.utilities import getFileContentAsJson
 from SNMPMon.utilities import dumpFileContentAsJson
 from SNMPMon.utilities import moveFile
 from SNMPMon.utilities import updatedict
+from SNMPMon.utilities import getConfig
 
 
 def externalCommand(command, communicate=True):
@@ -171,3 +172,8 @@ class MultiWorker():
         moveFile(latestFName, newFName)
         # Mark as not first run, so if service stops, it uses restart
         self.firstRun = False
+
+if __name__ == '__main__':
+    CONFIG = getConfig('/etc/snmp-mon.yaml')
+    MULTIWORKER = MultiWorker(CONFIG)
+    MULTIWORKER.startwork()
