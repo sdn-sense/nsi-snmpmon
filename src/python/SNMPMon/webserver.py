@@ -200,7 +200,7 @@ class Frontend(Authorize):
         for vlan, macs in macVals.items():
             incr = 0
             for mac in macs:
-                macState.labels(**{'vlan': vlan, 'hostname': devname, 'incr': str(incr)}).info({'macaddress': mac})
+                macState.labels(**{'vlan': vlan, 'hostname': devname, 'incr': str(incr)}).info({'macaddress': mac.lower()})
                 incr += 1
 
     def __addGeneralInfo(self, val, devname, snmpGauge):
