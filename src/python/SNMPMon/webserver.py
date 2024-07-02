@@ -117,16 +117,16 @@ class Frontend(Authorize):
 
     def __saveRequest(self, data):
         """Save request to httpdir"""
-        uuid, orchestrator = data.get('uuid', ''), data.get('orchestrator', '')
-        fName = os.path.join(self.config['httpdir'], f"snmpmon-{uuid}-{orchestrator}.json")
+        uuid = data.get('uuid', '')
+        fName = os.path.join(self.config['httpdir'], f"snmpmon-{uuid}.json")
         dumpFileContentAsJson(self.config, fName, data, True)
 
     def submitCheck(self, environ, start_response):
         """Check if request is submitted"""
         try:
             data = self.__getinputdata(environ)
-            uuid, orchestrator = data.get('uuid', ''), data.get('orchestrator', '')
-            fName = os.path.join(self.config['httpdir'], f"snmpmon-{uuid}-{orchestrator}.json")
+            uuid = data.get('uuid', '')
+            fName = os.path.join(self.config['httpdir'], f"snmpmon-{uuid}.json")
             if os.path.exists(fName):
                 start_response('200 OK', self.headers)
                 return [bytes(f'File {fName} already exists.', "UTF-8")]
@@ -149,13 +149,27 @@ class Frontend(Authorize):
         """Delete submitted request"""
         try:
             data = self.__getinputdata(environ)
-            uuid, orchestrator = data.get('uuid', ''), data.get('orchestrator', '')
-            fName = os.path.join(self.config['httpdir'], f"snmpmon-{uuid}-{orchestrator}.json")
+            uuid = data.get('uuid', '')
+            fName = os.path.join(self.config['httpdir'], f"snmpmon-{uuid}.json")
             if os.path.exists(fName):
                 data['stopRun'] = True
                 self.__saveRequest(data)
                 start_response('200 OK', self.headers)
                 return [bytes(f'File {fName} deleted successfully.', "UTF-8")]
+            start_response('404 Not Found', self.headers)
+            return [bytes(f'File {fName} does not exist.', "UTF-8")]
+        except Exception as ex:
+            raise Exception(f"Error: {ex}") from ex
+
+    def submitGet(self, environ, start_response):
+        """Get submitted request"""
+        try:
+            data = self.__getinputdata(environ)
+            uuid = data.get('uuid', '')
+            fName = os.path.join(self.config['httpdir'], f"snmpmon-{uuid}.json")
+            if os.path.exists(fName):
+                start_response('200 OK', self.headers)
+                return [bytes(str(getFileContentAsJson(fName)), "UTF-8")]
             start_response('404 Not Found', self.headers)
             return [bytes(f'File {fName} does not exist.', "UTF-8")]
         except Exception as ex:
@@ -234,15 +248,19 @@ class Frontend(Authorize):
     def _submitRequest(self, environ, start_response):
         """Submit Request check"""
         # Accept post method and save to httpdir config location
-        if environ['REQUEST_METHOD'] == 'POST' and environ['SCRIPT_URL'] == '/submit':
-            start_response('200 OK', self.headers)
-            return self.submitRequest(environ)
-        # Allow to check if there is a submitted request
-        if environ['REQUEST_METHOD'] == 'POST' and environ['SCRIPT_URL'] == '/submitcheck':
-            return self.submitCheck(environ, start_response)
-        # Allow to delete submitted request
-        if environ['REQUEST_METHOD'] == 'POST' and environ['SCRIPT_URL'] == '/submitdelete':
-            return self.submitDelete(environ, start_response)
+        if environ['REQUEST_METHOD'] == 'POST':
+            if environ['SCRIPT_URL'] == '/submit':
+                start_response('200 OK', self.headers)
+                return self.submitRequest(environ)
+            # Allow to check if there is a submitted request
+            if environ['SCRIPT_URL'] == '/submitcheck':
+                return self.submitCheck(environ, start_response)
+            # Allow to delete submitted request
+            if environ['SCRIPT_URL'] == '/submitdelete':
+                return self.submitDelete(environ, start_response)
+            # Get content of submitted request
+            if environ['SCRIPT_URL'] == '/submitget':
+                return self.submitGet(environ, start_response)
         start_response('404 Not Found', self.headers)
         return iter([b'Not Found'])
 

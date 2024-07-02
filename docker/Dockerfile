@@ -15,7 +15,8 @@ RUN mkdir -p /opt/snmpmon/output/ && \
     mkdir -p /etc/grid-security/certificates && \
     mkdir -p /var/log/supervisor && \
     mkdir -p /etc/supervisord.d/ && \
-    rm -f /etc/httpd/conf.d/ssl.conf
+    rm -f /etc/httpd/conf.d/ssl.conf && \
+    chown -R apache:apache /opt/httprequests/ /opt/snmpmon/output/
 
 RUN wget https://raw.githubusercontent.com/sdn-sense/rm-configs/master/CAs/SiteRM.pem -O /etc/grid-security/certificates/e52ac827.0
 RUN cd /opt/snmpmon && git clone https://github.com/sdn-sense/nsi-snmpmon
