@@ -278,7 +278,7 @@ class Frontend(Authorize):
             return self.metrics()
         # Accept post method and save to httpdir config location
         if environ['SCRIPT_URL'].startswith('/submit'):
-            self._submitRequest(environ, start_response)
+            return self._submitRequest(environ, start_response)
         if environ['SCRIPT_URL'] in self.allowedUrls:
             start_response('200 OK', self.headers)
             return self.metrics(self.allowedUrls[environ['SCRIPT_URL']])
