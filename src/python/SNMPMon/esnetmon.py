@@ -65,8 +65,11 @@ class ESnetES():
                         self.outdata[device][port].setdefault(key, []).append(bucket[key]["value"])
                     if "mac_addresses" in bucket:
                         for macaddr in bucket["mac_addresses"]["buckets"]:
-                            if macaddr['key'] not in self.outdata[device][port].get("mac_addresses", []):
-                                self.outdata[device][port].setdefault("mac_addresses", []).append(macaddr['key'])
+                            # mac can be 0:90:fb:76:e4:7b, 0:f:53:3b:a:f4 or 00:90:fb:76:e4:7b
+                            # we need to split and add leading 0 if needed
+                            newmac = ':'.join([f"{int(x, 16):02x}" for x in macaddr['key'].split(':')])
+                            if newmac not in self.outdata[device][port].get("mac_addresses", []):
+                                self.outdata[device][port].setdefault("mac_addresses", []).append(newmac)
 
 
     def get_all(self, **kwargs):
