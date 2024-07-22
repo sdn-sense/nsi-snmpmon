@@ -12,7 +12,8 @@ from setupUtilities import get_py_modules, VERSION
 # Also another cronjob, which monitors config file and modifies cronjobs if needed.
 # Currently it is allowed to specify only minutes and up to 30 minutes.
 # This is how CRONJOBS are handled and division is done only for the current hour.
-SCRIPTS = ["packaging/SNMPMonitoring", "packaging/MultiWorker", "packaging/ESnetMonitoring"]
+SCRIPTS = ["packaging/SNMPMonitoring", "packaging/MultiWorker",
+           "packaging/ESnetMonitoring", "packaging/TSDSMonitoring",]
 
 setup(
     name='SNMPMon',

@@ -111,7 +111,7 @@ class MultiWorker():
         # which should check if it is status ok and if not - restart it.
         if not self.config.get('snmpMon', {}):
             self.logger.error("No devices to monitor")
-            return
+            return False
         for device in self.config.get('snmpMon', {}).keys():
             # Check status
             retOut = self._runCmd('SNMPMonitoring', 'status', device)
@@ -125,12 +125,48 @@ class MultiWorker():
                 retOut = self._runCmd('SNMPMonitoring', 'restart', device, True)
                 self.logger.info(f"Restarting SNMPMonitoring for {device} - {retOut}")
                 continue
+        return True
+
+    def _startTSDSMonitoring(self):
+        """Read hhtpdir config and start TSDS monitoring processes"""
+        if not self.config.get('tsds_uri', ''):
+            self.logger.error("No TSDS devices to monitor configured.")
+            return False
+        for file in os.listdir(self.config['httpdir']):
+            if not file.endswith('.json'):
+                continue
+            fName = os.path.join(self.config['httpdir'], file)
+            config = getFileContentAsJson(fName)
+            uuid, orchestrator = config.get('uuid', ''), config.get('orchestrator', '')
+            firstRun, stopRun = bool(config.get('firstRun', True)), bool(config.get('stopRun', False))
+            if not uuid or not orchestrator:
+                self.logger.error(f"UUID or Orchestrator is missing in {fName}")
+                continue
+            if stopRun:
+                self.logger.info(f"Stopping TSDSMonitoring for {uuid}")
+                retOut = self._runCmd('TSDSMonitoring', 'stop', uuid, True)
+                self.logger.info(f"Stopping TSDSMonitoring for {uuid} - {retOut}")
+                os.remove(fName)
+                continue
+            # Write back the file with firstRun set to False
+            retOut = self._runCmd('TSDSMonitoring', 'status', uuid)
+            if retOut['exitCode'] != 0 and firstRun:
+                self.logger.info(f"Starting TSDSMonitoring for {uuid}")
+                retOut = self._runCmd('TSDSMonitoring', 'start', uuid, True)
+                self.logger.info(f"Starting TSDSMonitoring for {uuid} - {retOut}")
+                continue
+            if retOut['exitCode'] != 0 and not firstRun:
+                self.logger.error(f"TSDSMonitoring for {uuid} failed: {retOut}")
+                retOut = self._runCmd('TSDSMonitoring', 'restart', uuid, True)
+                self.logger.info(f"Restarting TSDSMonitoring for {uuid} - {retOut}")
+                continue
+        return True
 
     def _startESnetMonitoring(self):
         """Read httpdir config and start ESnet monitoring processes"""
         if not self.config.get('es_host', '') and not self.config.get('es_index', ''):
             self.logger.error("No ESnet devices to monitor configured.")
-            return
+            return False
         for file in os.listdir(self.config['httpdir']):
             if not file.endswith('.json'):
                 continue
@@ -159,13 +195,24 @@ class MultiWorker():
                 retOut = self._runCmd('ESnetMonitoring', 'restart', uuid, True)
                 self.logger.info(f"Restarting ESnetMonitoring for {uuid} - {retOut}")
                 continue
+        return True
 
     def startwork(self):
         """Multiworker main process"""
         # Start all SNMPMonitoring processes
-        self._startSNMPMonitoring()
+        started = self._startSNMPMonitoring()
+        if started:
+            self.logger.info("SNMPMonitoring started successfully. Will not start any other monitoring (Only one allowed).")
         # Start all ESnet monitoring processes
-        self._startESnetMonitoring()
+        if not started:
+            started = self._startESnetMonitoring()
+        if started:
+            self.logger.info("ESnet monitoring started successfully. Will not start any other monitoring (Only one allowed).")
+        # Start TSDS Monitoring process
+        if not started:
+            started = self._startTSDSMonitoring()
+        if started:
+            self.logger.info("TSDS monitoring started successfully. Will not start any other monitoring (Only one allowed).")
         # join all output files to a single file
         newFName = self._latestOutput()
         latestFName = os.path.join(self.config['tmpdir'], 'snmp-multiworker-latest.json')
