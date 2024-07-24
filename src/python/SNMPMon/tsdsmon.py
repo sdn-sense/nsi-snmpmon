@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """ TSDS Sense Real Time Monitoring Exporter"""
+import sys
 import pprint
-from os import walk
 import os.path
 import requests
 from SNMPMon.utilities import getConfig
@@ -13,9 +13,15 @@ from SNMPMon.utilities import getUTCnow
 
 def sum_and_average(data):
     """Sum and average input data"""
-    second_values = [item[1] for item in data]
-    total_sum = sum(second_values)
-    average = total_sum / len(second_values) if second_values else 0
+    secondvals = [item[1] for item in data]
+    total_sum = 0
+    for val in secondvals:
+        if val:
+            try:
+                total_sum += float(val)
+            except ValueError:
+                continue
+    average = total_sum / len(secondvals) if secondvals else 0
     return average
 
 class TSDS():
@@ -24,13 +30,25 @@ class TSDS():
         self.config = config
         self.logger = logger if logger else getTimeRotLogger(**config['logParams'])
         self.scanfile = os.path.join(config['httpdir'], f"snmpmon-{scanfile}.json")
-        self.tsdsuri = config.get('tsdsuri', 'http://localhost:8086/query')
+        self.tsdsuri = config.get('tsds_uri', 'http://localhost:8086/query')
         self.outdata = {}
         self.mapkeys = {}
+        self.config['overwrite'] = {'hostname': '.net.internet2.edu'}
 
     def _clean(self):
         """Clean up"""
         self.outdata = {}
+
+    def overwrite(self, **kwargs):
+        """Overwrite the config"""
+        if self.config.get('overwrite', {}):
+            for key, val in self.config['overwrite'].items():
+                if key in kwargs:
+                    splth =kwargs[key].split("+")
+                    out = splth[1] + val
+                    return out
+        return kwargs.get('hostname', '')
+
 
     def _writeOutFile(self):
         """Write out file in an expected output format"""
@@ -45,7 +63,10 @@ class TSDS():
                 if not port:
                     continue
                 incr += 1
-                tmpd = {"ifDescr": port, "ifType": "6", "ifAlias": port, "hostname": device}
+                # ifDescr=~"node+core1.star.*port+HundredGigE0/0/0/20-3600"
+                # Special replacement of dot to dash and also custom for Internet2
+                ifDescr = device + "-port+" + port.replace('.', '-')
+                tmpd = {"ifDescr": ifDescr, "ifType": "6", "ifAlias": port, "hostname": device}
                 for key, mapkey in self.mapkeys.items():
                     if key in res:
                         tmpd[mapkeys[mapkey]] = sum_and_average(res[key])
@@ -91,16 +112,13 @@ class TSDS():
             return
 
         for device in devinput.get('devices', []):
-            self.logger.info(f"Working on device: {device['device']}")
-            self.outdata[device['device']] = self._callTSDS(device['device'], ["input", "output", "inerror", "outerror", "indiscard", "outdiscard"])
+            hostname = self.overwrite(hostname=device['device'])
+            self.logger.info(f"Working on device: {hostname}")
+            self.outdata[device['device']] = self._callTSDS(hostname, ["input", "output", "inerror", "outerror", "indiscard", "outdiscard"])
         pprint.pprint(self.outdata)
         self._writeOutFile()
 
 if __name__ == "__main__":
     conf = getConfig('/etc/snmp-mon.yaml')
-    for (dirpath, dirnames, filenames) in walk(conf['httpdir']):
-        for filename in filenames:
-            if not filename.endswith('.json'):
-                continue
-            ts = TSDS(conf, os.path.join(conf['httpdir'], filename))
-            ts.startwork()
+    ts = TSDS(conf, sys.argv[1])
+    ts.startwork()
