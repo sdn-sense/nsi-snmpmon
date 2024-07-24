@@ -11,6 +11,7 @@ Date: 2024/05/23
 import os
 import time
 import subprocess
+from datetime import datetime, timedelta
 import shlex
 from SNMPMon.utilities import getTimeRotLogger
 from SNMPMon.utilities import getFileContentAsJson
@@ -18,6 +19,18 @@ from SNMPMon.utilities import dumpFileContentAsJson
 from SNMPMon.utilities import moveFile
 from SNMPMon.utilities import updatedict
 from SNMPMon.utilities import getConfig
+
+def fileUpdatedLastNMin(filename, minutes=5):
+    """Check if file was updated with-in last N minutes."""
+    try:
+        fileMtime = os.path.getmtime(filename)
+        fileMtimeDt = datetime.fromtimestamp(fileMtime)
+        currentTime = datetime.now()
+        if currentTime - fileMtimeDt <= timedelta(minutes=minutes):
+            return True
+    except FileNotFoundError:
+        return False
+    return False
 
 
 def externalCommand(command, communicate=True):
@@ -35,6 +48,7 @@ class MultiWorker():
         self.config = config
         self.logger = logger if logger else getTimeRotLogger(**config['logParams'])
         self.firstRun = True
+        self.scannedfiles = []
 
     def _runCmd(self, cmd, action, device, foreground=False):
         """Start execution of new requests"""
@@ -72,6 +86,7 @@ class MultiWorker():
                 continue
             fName = os.path.join(self.config['httpdir'], file)
             try:
+                self.scannedfiles.append(fName)
                 tmpOut = getFileContentAsJson(fName)
                 if tmpOut and tmpOut.get('runinfo', {}).get('oscarsid', ''):
                     if tmpOut['runinfo']['oscarsid'] not in oscarIds:
@@ -89,12 +104,34 @@ class MultiWorker():
                 self.logger.debug(f'Got Exception: {ex}')
         return out
 
+    def _latestOutputOther(self):
+        """Get all the rest files and merge them."""
+        # Get all the rest files
+        out = {}
+        for dirname, _dirs, files in os.walk(self.config['tmpdir']):
+            for filename in files:
+                fName = os.path.join(dirname, filename)
+                if fName in self.scannedfiles:
+                    continue
+                if filename == 'snmp-multiworker-latest.json':
+                    continue
+                if not fileUpdatedLastNMin(fName, 5):
+                    continue
+                try:
+                    tmpOut = getFileContentAsJson(fName)
+                    if tmpOut:
+                        out = updatedict(out, tmpOut)
+                except Exception as ex:
+                    self.logger.debug(f'Got Exception: {ex}')
+        return out
+
     def _latestOutput(self):
         """Get latest output from all devices and write it to a single file."""
         out = {}
         for device in self.config.get('snmpMon', {}).keys():
             fName = os.path.join(self.config['tmpdir'], f"snmp-{device}-latest.json")
             try:
+                self.scannedfiles.append(fName)
                 tmpOut = self.__getLatestOutput(fName)
                 if tmpOut:
                     out[device] = tmpOut
@@ -103,6 +140,7 @@ class MultiWorker():
         esnetout = self._latestOutputESnet()
         if esnetout:
             out = updatedict(out, esnetout)
+        out = updatedict(out, self._latestOutputOther())
         return dumpFileContentAsJson(self.config, 'multiworker', out)
 
     def _startSNMPMonitoring(self):
@@ -200,6 +238,7 @@ class MultiWorker():
     def startwork(self):
         """Multiworker main process"""
         # Start all SNMPMonitoring processes
+        self.scannedfiles = []
         started = self._startSNMPMonitoring()
         if started:
             self.logger.info("SNMPMonitoring started successfully. Will not start any other monitoring (Only one allowed).")

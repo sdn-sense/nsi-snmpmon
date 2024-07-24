@@ -74,7 +74,7 @@ class TSDS():
             # Set the runtime
             snmpout.setdefault(device, {}).setdefault('snmp_scan_runtime', getUTCnow())
         pprint.pprint(snmpout)
-        return dumpFileContentAsJson(self.config, 'tsds', snmpout)
+        return dumpFileContentAsJson(self.config, device, snmpout)
 
     def _callTSDS(self, host, fields):
         """Call TSDS and Get data"""
