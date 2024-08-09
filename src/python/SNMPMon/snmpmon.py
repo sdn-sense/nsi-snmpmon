@@ -64,32 +64,49 @@ class SNMPMonitoring(Overrides):
     def _writeOutFile(self, out):
         return dumpFileContentAsJson(self.config, self.hostname, out)
 
-    def __includeFilter(self, key, val):
+    def __includeFilter(self, val):
         """
+        # Filter rules inside configuration file
         filterRules:
           dellos9_s0:
             operator: 'and'
             filters:
-              Key: 'ifAdminStatus'
-              ifDescr: ["hundredGigE 1/21", "Vlan 100"]
-        where keys:
+              - Key: 'ifAdminStatus'
+                Val: 'up'
+                Startswith: False (default is False - if True - will use py startswith call)
+                Replacement: '<new_value>' (optional - if defined will replace value with new_value)
+              - Key: ifDescr
+                Val: ["hundredGigE 1/21", "Vlan 100"]
+        where val is dictionary and has:
         {'ifDescr': 'Vlan 100',
          'ifType': '135',
           'ifAlias': 'Kubernetes Multus for SENSE',
           'hostname': 'dellos9_s0',
           'Key': 'ifHCInBroadcastPkts'}
         """
+        retVal = True
         if 'filterRules' not in self.config:
-            return True
+            return retVal, val
         if self.hostname not in self.config['filterRules']:
-            return True
+            return retVal, val
         filterChecks = []
-        for filterKey, filterVal in self.config['filterRules'][self.hostname].get('filters', {}).items():
-            if filterKey != key:
+        for filterItem in self.config['filterRules'][self.hostname].get('filters', []):
+            filterKey = filterItem.get('Key', '')
+            filterVal = filterItem.get('Val', '')
+            filterStarts = filterItem.get('Startswith', False)
+            filterReplace = filterItem.get('Replacement', '')
+            if not filterKey or not filterVal:
+                # That is wrong filter. We raise error and continue to include it
+                self.logger.warning('Filter rule missing either Key or Val defined. Will not check based on this Key/Val')
+                filterChecks.append(True)
                 continue
             if isinstance(filterVal, str):
-                if val == filterVal:
+                if not filterStarts and filterKey in val and val[filterKey] == filterVal:
                     filterChecks.append(True)
+                    val[filterKey] = filterReplace if filterReplace else val[filterKey]
+                elif filterStarts and filterKey in val and val[filterKey].startswith(filterVal):
+                    filterChecks.append(True)
+                    val[filterKey] = val[filterKey].replace(filterVal, filterReplace) if filterReplace else val[filterKey]
                 else:
                     filterChecks.append(False)
             elif isinstance(filterVal, list):
@@ -98,12 +115,14 @@ class SNMPMonitoring(Overrides):
                 else:
                     filterChecks.append(False)
         if not filterChecks:
-            return True
-        if self.config['filterRules'][self.hostname]['operator'] == 'and' and all(filterChecks):
-            return True
-        if self.config['filterRules'][self.hostname]['operator'] == 'or' and any(filterChecks):
-            return True
-        return False
+            retVal = True
+        elif self.config['filterRules'][self.hostname]['operator'] == 'and' and all(filterChecks):
+            retVal = True
+        elif self.config['filterRules'][self.hostname]['operator'] == 'or' and any(filterChecks):
+            retVal = True
+        else:
+            retVal = False
+        return retVal, val
 
     def scanMacAddresses(self, session):
         """Scan all MAC addresses"""
@@ -141,9 +160,7 @@ class SNMPMonitoring(Overrides):
                 for item in allvals:
                     indx = item.oid_index
                     out.setdefault(indx, {})
-                    val = item.value.replace('\x00', '')
-                    if self.__includeFilter(key, val):
-                        out[indx][key] = val
+                    out[indx][key] = item.value.replace('\x00', '')
             except EasySNMPUnknownObjectIDError as ex:
                 self.logger.warning(f'Got exception for key {key}: {ex}')
                 err.append(ex)
@@ -152,8 +169,14 @@ class SNMPMonitoring(Overrides):
                 self.logger.warning(f'Got SNMP Timeout Exception: {ex}')
                 err.append(ex)
                 continue
-        out = self.callOverrides(session, out)
-        jsonOut[self.hostname] = out
+        # Filter items out
+        filteredOut = {}
+        for indx, vals in out.items():
+            inclFlag, vals = self.__includeFilter(vals)
+            if inclFlag:
+                filteredOut[indx] = vals
+        filteredOut = self.callOverrides(session, filteredOut)
+        jsonOut[self.hostname] = filteredOut
         jsonOut['macs'] = self.scanMacAddresses(session)
         jsonOut['snmp_scan_runtime'] = getUTCnow()
         newFName = self._writeOutFile(jsonOut)
@@ -164,7 +187,7 @@ class SNMPMonitoring(Overrides):
 
 def execute(hostname):
     """Main Execute."""
-    config = getConfig('/etc/snmp-mon.yaml')
+    config = getConfig('/etc/snmp-mon-cenic.yaml')
     snmpmon = SNMPMonitoring(config, hostname)
     snmpmon.startwork()
 
