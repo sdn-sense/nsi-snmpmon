@@ -71,7 +71,7 @@ class MultiWorker():
                 if out:
                     return out
             except Exception as ex:
-                self.logger.debug(f'Got Exception: {ex}')
+                self.logger.debug(f'Got Exception3: {ex}')
             retryCount += 1
             time.sleep(0.2)
         return {}
@@ -92,7 +92,7 @@ class MultiWorker():
                     if tmpOut['runinfo']['oscarsid'] not in oscarIds:
                         oscarIds.append(tmpOut['runinfo']['oscarsid'])
             except Exception as ex:
-                self.logger.debug(f'Got Exception: {ex}')
+                self.logger.debug(f'Got Exception4: {ex}')
         # Now here we loop via all OscarIds and get latest output
         for oscarId in oscarIds:
             fName = os.path.join(self.config['tmpdir'], f"snmp-{oscarId}.json")
@@ -101,7 +101,7 @@ class MultiWorker():
                 if tmpOut:
                     out = updatedict(out, tmpOut)
             except Exception as ex:
-                self.logger.debug(f'Got Exception: {ex}')
+                self.logger.debug(f'Got Exception1: {ex}')
         return out
 
     def _latestOutputOther(self):
@@ -122,7 +122,7 @@ class MultiWorker():
                     if tmpOut:
                         out = updatedict(out, tmpOut)
                 except Exception as ex:
-                    self.logger.debug(f'Got Exception: {ex}')
+                    self.logger.debug(f'Got Exception2: {ex}')
         return out
 
     def _latestOutput(self):
@@ -136,7 +136,7 @@ class MultiWorker():
                 if tmpOut:
                     out[device] = tmpOut
             except Exception as ex:
-                self.logger.debug(f'Got Exception: {ex}')
+                self.logger.debug(f'Got Exception5: {ex}')
         esnetout = self._latestOutputESnet()
         if esnetout:
             out = updatedict(out, esnetout)
@@ -148,7 +148,7 @@ class MultiWorker():
         # Read config and for each device start SNMPMonitoring supervisord process
         # which should check if it is status ok and if not - restart it.
         if not self.config.get('snmpMon', {}):
-            self.logger.error("No devices to monitor")
+            self.logger.error("No devices to monitor configured for SNMP.")
             return False
         for device in self.config.get('snmpMon', {}).keys():
             # Check status
@@ -239,19 +239,14 @@ class MultiWorker():
         """Multiworker main process"""
         # Start all SNMPMonitoring processes
         self.scannedfiles = []
-        started = self._startSNMPMonitoring()
-        if started:
-            self.logger.info("SNMPMonitoring started successfully. Will not start any other monitoring (Only one allowed).")
-        # Start all ESnet monitoring processes
-        if not started:
-            started = self._startESnetMonitoring()
-        if started:
-            self.logger.info("ESnet monitoring started successfully. Will not start any other monitoring (Only one allowed).")
-        # Start TSDS Monitoring process
-        if not started:
-            started = self._startTSDSMonitoring()
-        if started:
-            self.logger.info("TSDS monitoring started successfully. Will not start any other monitoring (Only one allowed).")
+        for service, servclass in {'SNMPMonitoring': self._startSNMPMonitoring,
+                                   'ESnetMonitoring': self._startESnetMonitoring,
+                                   'TSDSMonitoring': self._startTSDSMonitoring}.items():
+            started = servclass()
+            if started:
+                self.logger.info(f"{service} started successfully. Will not start any other monitoring (Only one allowed).")
+                break
+            self.logger.error(f"{service} not started. Either not configured or already running.")
         # join all output files to a single file
         newFName = self._latestOutput()
         latestFName = os.path.join(self.config['tmpdir'], 'snmp-multiworker-latest.json')

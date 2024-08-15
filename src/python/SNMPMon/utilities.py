@@ -29,6 +29,8 @@ def isValFloat(inVal):
         float(inVal)
     except ValueError:
         return False
+    except TypeError:
+        return False
     return True
 
 def evaldict(inputDict):
@@ -155,16 +157,21 @@ def overrideMacMappings(config, mappings):
         mappings['mib'] = config['mib']
     return mappings
 
+def findMaxInteger(strlist):
+    """Find the maximum integer in a list of strings."""
+    intlist = list(map(int, strlist))
+    return max(intlist)
+
 def updatedict(orig, new):
     """Update dictionary."""
     for key, val in new.items():
-        if key in orig:
-            if isinstance(val, dict):
-                orig[key] = updatedict(orig[key], val)
-            elif isinstance(val, list):
-                orig[key] += val
-            else:
-                orig[key] = val
-        else:
-            orig[key] = val
+        for key1, val1 in val.items():
+            if not isinstance(val1, dict):
+                orig.setdefault(key, {}).setdefault(key1, "")
+                orig[key][key1] = val1
+                continue
+            for _mkey, mval in val1.items():
+                allitems = list(orig.get(key, {}).get(key1, {}).keys())
+                nextint = findMaxInteger(allitems) + 1 if allitems else 0
+                orig.setdefault(key, {}).setdefault(key1, {})[str(nextint)] = mval
     return orig
