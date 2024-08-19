@@ -197,20 +197,27 @@ class Frontend(Authorize):
 
     def __addMacInfo(self, macVals, devname, macState):
         """Add Mac Info to prometheus output"""
-        for vlan, macs in macVals.items():
-            incr = 0
-            for mac in macs:
-                macState.labels(**{'vlan': vlan, 'hostname': devname, 'incr': str(incr)}).info({'macaddress': mac.lower()})
-                incr += 1
+        for _cntr, vlandict in macVals.items():
+            for vlan, macs in vlandict.items():
+                incr = 0
+                added = []
+                for mac in macs:
+                    # Secure from duplicate entries;
+                    if mac.lower() in added:
+                        continue
+                    added.append(mac.lower())
+                    macState.labels(**{'vlan': vlan, 'hostname': devname, 'incr': str(incr)}).info({'macaddress': mac.lower()})
+                    incr += 1
 
-    def __addGeneralInfo(self, val, devname, snmpGauge):
+    def __addGeneralInfo(self, vals, devname, snmpGauge):
         """Add General Info to prometheus output"""
-        keys = {'ifDescr': val.get('ifDescr', ''), 'ifType': val.get('ifType', ''),
-                'ifAlias': val.get('ifAlias', ''), 'hostname': devname}
-        for key1, val1 in val.items():
-            if isValFloat(val1):
-                keys['Key'] = key1
-                snmpGauge.labels(**keys).set(val1)
+        for _cntr, val in vals.items():
+            keys = {'ifDescr': val.get('ifDescr', ''), 'ifType': val.get('ifType', ''),
+                    'ifAlias': val.get('ifAlias', ''), 'hostname': devname}
+            for key1, val1 in val.items():
+                if isValFloat(val1):
+                    keys['Key'] = key1
+                    snmpGauge.labels(**keys).set(val1)
 
     def __getSNMPData(self, registry, host = None):
         """Add SNMP Data to prometheus output"""
@@ -237,13 +244,10 @@ class Frontend(Authorize):
             for hostname, vals in devout.items():
                 if hostname == 'snmp_scan_runtime':
                     runtimeInfo.labels(**{'servicename': 'SNMPMonitoring', 'hostname': devname}).set(vals)
-                    continue
-                for mkey, val in vals.items():
-                    # Add mac info
-                    if mkey == 'vlans':
-                        self.__addMacInfo(val, devname, macState)
-                    else:
-                        self.__addGeneralInfo(val, devname, snmpGauge)
+                elif hostname == "macs":
+                    self.__addMacInfo(vals, devname, macState)
+                else:
+                    self.__addGeneralInfo(vals, devname, snmpGauge)
 
     def _submitRequest(self, environ, start_response):
         """Submit Request check"""
