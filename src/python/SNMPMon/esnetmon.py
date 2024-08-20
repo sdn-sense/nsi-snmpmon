@@ -17,7 +17,7 @@ class ESnetES():
         self.config = config
         self.logger = logger if logger else getTimeRotLogger(**config['logParams'])
         self.scanfile = os.path.join(config['httpdir'], f"snmpmon-{scanfile}.json")
-        self.client = Elasticsearch([config['es_host']], request_timeout=60)
+        self.client = Elasticsearch([config['es_host']], request_timeout=120, max_retries=2, retry_on_timeout=True)
         self.ind = config['es_index']
         self.monports = {'oscarsid': "", "ports": {}}
         self.outdata = {}
