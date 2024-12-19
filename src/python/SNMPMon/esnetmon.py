@@ -40,15 +40,9 @@ class ESnetES():
                                  "volume_outerr":{"sum":{"field":"values.out_errors.delta"}},
                                  "volume_indisc":{"sum":{"field":"values.in_discards.delta"}},
                                  "volume_outdisc":{"sum":{"field":"values.out_discards.delta"}},
-                                 "mac_addresses":{"terms":{"field": "meta.fdb_mac_addrs"}},
-                                 "rate_in":{"bucket_script":{"buckets_path":{"volume": "volume_in"},"script": "params.volume / 300"}},
-                                 "rate_out":{"bucket_script":{"buckets_path":{"volume": "volume_out"},"script": "params.volume / 300"}},
-                                 "err_in":{"bucket_script":{"buckets_path":{"volume": "volume_inerr"},"script": "params.volume / 300"}},
-                                 "err_out":{"bucket_script":{"buckets_path":{"volume": "volume_outerr"},"script": "params.volume / 300"}},
-                                 "disc_in":{"bucket_script":{"buckets_path":{"volume": "volume_indisc"},"script": "params.volume / 300"}},
-                                 "disc_out":{"bucket_script":{"buckets_path":{"volume": "volume_outdisc"},"script": "params.volume / 300"}}
+                                 "mac_addresses":{"terms":{"field": "meta.fdb_mac_addrs"}}
                         }}},
-            "query":{"bool":{"filter":[{"range":{"start":{"gte":"now-5m","lte":"now"}}}]}}}
+            "query":{"bool":{"filter":[{"range":{"start":{"gte":"now-6m","lte":"now-1m"}}}]}}}
 
         for device, ports in self.monports['ports'].items():
             # Get all oscars_ids for the device abd port
@@ -61,8 +55,8 @@ class ESnetES():
                 # Do an aggregation of results and log everything
                 self.outdata.setdefault(device, {}).setdefault(port, {})
                 for bucket in res["aggregations"]["volume_per_interval"]["buckets"]:
-                    for key in ["volume_in", "volume_out", "rate_in", "rate_out", "err_in", "err_out", "disc_in", "disc_out"]:
-                        self.outdata[device][port].setdefault(key, []).append(bucket[key]["value"])
+                    for key in ["volume_in", "volume_out", "volume_inerr", "volume_outerr", "volume_indisc", "volume_outdisc"]:
+                        self.outdata[device][port].setdefault(key, []).append(int(bucket[key]["value"]) / 8)
                     if "mac_addresses" in bucket:
                         for macaddr in bucket["mac_addresses"]["buckets"]:
                             # mac can be 0:90:fb:76:e4:7b, 0:f:53:3b:a:f4 or 00:90:fb:76:e4:7b
@@ -120,8 +114,8 @@ class ESnetES():
         """Write out file in an expected output format"""
         snmpout = {}
         incr = 0
-        mapkeys = {"rate_in": "ifHCInOctets", "rate_out": "ifHCOutOctets", "err_in": "ifInErrors",
-                   "err_out": "ifOutErrors", "disc_in": "ifInDiscards", "disc_out": "ifOutDiscards"}
+        mapkeys = {"volume_in": "ifHCInOctets", "volume_out": "ifHCOutOctets", "volume_inerr": "ifInErrors",
+                   "volume_outerr": "ifOutErrors", "volume_indisc": "ifInDiscards", "volume_outdisc": "ifOutDiscards"}
         for device, portdata in self.outdata.items():
             devout = snmpout.setdefault(device, {})
             for port, data in portdata.items():
@@ -179,5 +173,7 @@ if __name__ == "__main__":
         for filename in filenames:
             if not filename.endswith('.json'):
                 continue
-            es = ESnetES(conf, os.path.join(conf['httpdir'], filename))
-            es.startwork()
+            devconf = getFileContentAsJson(os.path.join(conf['httpdir'], filename))
+            if 'uuid' in devconf:
+                es = ESnetES(conf, devconf['uuid'])
+                es.startwork()
