@@ -55,7 +55,9 @@ class ESnetES():
 
         for device, ports in self.monports['ports'].items():
             # Get all oscars_ids for the device abd port
+            self.logger.info(f'Query info for device: {device}')
             for port in ports:
+                self.logger.info(f'Query info for port: {port}')
                 query = copy.deepcopy(mquery)
                 # Add filter for device and port
                 query["query"]["bool"]["filter"].append({"query_string": {"analyze_wildcard": True, "query": f"meta.id: \"{port}\""}})
@@ -165,11 +167,15 @@ class ESnetES():
 
         for device in devinput.get('devices', []):
             allports = self.get_all(query="ifaces", device=device["device"])
+            self.logger.info(f'All ports: {allports}')
             self.filterPorts(allports, device)
         # Now we have all ports we want to monitor
         self.identifyOscarId()
         self.get_dev_data()
         self._writeOutFile()
+        self.logger.info('Finished run')
+        self.logger.info(f'Full monports: {self.monports}')
+        self.logger.debug(f'Return out: {self.outdata}')
         if not devinput.get('runinfo', {}):
             self.logger.info(f"First run finished. dumping data. {devinput}")
             devinput['runinfo'] = self.monports
