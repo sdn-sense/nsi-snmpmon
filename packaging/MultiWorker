@@ -23,7 +23,7 @@ class MyDaemon(Daemon):
     def getThreads(self):
         """Multi threading. Allow multiple sites under single FE"""
         outThreads = {}
-        thr = MultiWorker(self.config, self.logger)
+        thr = MultiWorker(self.config)
         outThreads['General'] = thr
         return outThreads
 

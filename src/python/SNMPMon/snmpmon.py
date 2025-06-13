@@ -55,11 +55,20 @@ class Overrides():
 
 class SNMPMonitoring(Overrides):
     """SNMP Monitoring Class"""
-    def __init__(self, config, hostname, logger=None):
+    def __init__(self, config, hostname):
         super().__init__()
         self.config = config
-        self.logger = logger if logger else getTimeRotLogger(**config['logParams'])
+        self.logger = self._getCustomLogger(hostname)
         self.hostname = hostname
+
+    def _getCustomLogger(self, scanfile):
+        """Get Custom Logger"""
+        if 'logFile' in self.config['logParams']:
+            self.config['logParams']['logFile'] = f"{self.config['logParams']['logFile']}.{scanfile}.out"
+        else:
+            self.config['logParams']['logFile'] = f'{scanfile}.out'
+        self.config['logParams']['service'] = f'SNMP-{scanfile}'
+        return getTimeRotLogger(**self.config['logParams'])
 
     def _writeOutFile(self, out):
         return dumpFileContentAsJson(self.config, self.hostname, out)

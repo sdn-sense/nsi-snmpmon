@@ -26,7 +26,7 @@ class MyDaemon(Daemon):
             self.logger.error("Device name is not provided. Exiting")
             sys.exit(1)
         outThreads = {}
-        thr = ESnetES(self.config, self.inargs.devicename, self.logger)
+        thr = ESnetES(self.config, self.inargs.devicename)
         outThreads['General'] = thr
         return outThreads
 

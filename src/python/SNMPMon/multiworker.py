@@ -43,10 +43,10 @@ def externalCommand(command, communicate=True):
 
 class MultiWorker():
     """SNMP Monitoring Class"""
-    def __init__(self, config, logger=None):
+    def __init__(self, config):
         super().__init__()
         self.config = config
-        self.logger = logger if logger else getTimeRotLogger(**config['logParams'])
+        self.logger = getTimeRotLogger(**config['logParams'])
         self.firstRun = True
         self.scannedfiles = []
 

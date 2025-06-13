@@ -13,14 +13,23 @@ from SNMPMon.utilities import getUTCnow
 
 class ESnetES():
     """ESnet ElasticSearch Class"""
-    def __init__(self, config, scanfile, logger=None):
+    def __init__(self, config, scanfile):
         self.config = config
-        self.logger = logger if logger else getTimeRotLogger(**config['logParams'])
+        self.logger = self._getCustomLogger(scanfile)
         self.scanfile = os.path.join(config['httpdir'], f"snmpmon-{scanfile}.json")
         self.client = Elasticsearch([config['es_host']], request_timeout=120, max_retries=2, retry_on_timeout=True)
         self.ind = config['es_index']
         self.monports = {'oscarsid': "", "ports": {}}
         self.outdata = {}
+
+    def _getCustomLogger(self, scanfile):
+        """Get Custom Logger"""
+        if 'logFile' in self.config['logParams']:
+            self.config['logParams']['logFile'] = f"{self.config['logParams']['logFile']}.{scanfile}.out"
+        else:
+            self.config['logParams']['logFile'] = f'{scanfile}.out'
+        self.config['logParams']['service'] = f'ESnet-{scanfile}'
+        return getTimeRotLogger(**self.config['logParams'])
 
     def _clean(self):
         """Clean up"""

@@ -14,7 +14,7 @@ import traceback
 import atexit
 import psutil
 from SNMPMon.utilities import getConfig
-from SNMPMon.utilities import getTimeRotLogger
+from SNMPMon.utilities import getStreamLogger
 
 def getParser(description):
     """Returns the argparse parser."""
@@ -53,7 +53,7 @@ class Daemon():
         if self.inargs.devicename:
             self.pidfile = f'/tmp/nsi-snmpmon-{component}-{self.inargs.devicename}.pid'
         self.config = getConfig('/etc/snmp-mon.yaml')
-        self.logger = getTimeRotLogger(**self.config['logParams'])
+        self.logger = getStreamLogger(**self.config['logParams'])
 
     def daemonize(self):
         """do the UNIX double-fork magic, see Stevens' "Advanced Programming in
@@ -178,6 +178,7 @@ class Daemon():
                     print('Application is running')
                 except (OSError, ProcessLookupError) as ex:
                     print('Application is not running')
+                    print(f'Exception {ex}')
                     os.remove(self.pidfile)
                     sys.exit(1)
         except IOError:
