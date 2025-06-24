@@ -157,7 +157,13 @@ class SNMPMonitoring(Overrides):
         if 'snmpParams' not in self.config['snmpMon'][self.hostname]:
             self.logger.info(f'Host: {self.hostname} config does not have snmpParams parameters.')
             return
-        session = Session(**self.config['snmpMon'][self.hostname]['snmpParams'])
+        try:
+            session = Session(**self.config['snmpMon'][self.hostname]['snmpParams'])
+        except ValueError:
+            conf = self.config['snmpMon'][self.hostname]['snmpParams']
+            hostname = conf.pop('hostname')
+            session = Session(**conf)
+            session.update_session(hostname=hostname)
         out = {}
         for key in ['ifDescr', 'ifType', 'ifMtu', 'ifAdminStatus', 'ifOperStatus',
                     'ifHighSpeed', 'ifAlias', 'ifHCInOctets', 'ifHCOutOctets', 'ifInDiscards',
