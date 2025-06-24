@@ -10,6 +10,7 @@ from SNMPMon.utilities import getFileContentAsJson
 from SNMPMon.utilities import dumpFileContentAsJson
 from SNMPMon.utilities import getTimeRotLogger
 from SNMPMon.utilities import getUTCnow
+from SNMPMon.utilities import parseEsTime
 
 class ESnetES():
     """ESnet ElasticSearch Class"""
@@ -36,21 +37,13 @@ class ESnetES():
         self.monports = {'oscarsid': "", "ports": {}}
         self.outdata = {}
 
-    def get_dev_data(self, **kwargs):
-        """Get device data"""
+    def get_mac_data(self, **kwargs):
         mquery = {
            "size":0,
            "_source":False,
            "aggs":{"volume_per_interval": {
                         "date_histogram": {"field": "start","fixed_interval": "30s"},
-                        "aggs": {"volume_in":{"sum":{"field":"values.in_bits.delta"}},
-                                 "volume_out":{"sum":{"field":"values.out_bits.delta"}},
-                                 "volume_inerr":{"sum":{"field":"values.in_errors.delta"}},
-                                 "volume_outerr":{"sum":{"field":"values.out_errors.delta"}},
-                                 "volume_indisc":{"sum":{"field":"values.in_discards.delta"}},
-                                 "volume_outdisc":{"sum":{"field":"values.out_discards.delta"}},
-                                 "mac_addresses":{"terms":{"field": "meta.fdb_mac_addrs"}}
-                        }}},
+                        "aggs": {"mac_addresses":{"terms":{"field": "meta.fdb_mac_addrs"}}}}},
             "query":{"bool":{"filter":[{"range":{"start":{"gte":"now-6m","lte":"now-1m"}}}]}}}
 
         for device, ports in self.monports['ports'].items():
@@ -66,8 +59,6 @@ class ESnetES():
                 # Do an aggregation of results and log everything
                 self.outdata.setdefault(device, {}).setdefault(port, {})
                 for bucket in res["aggregations"]["volume_per_interval"]["buckets"]:
-                    for key in ["volume_in", "volume_out", "volume_inerr", "volume_outerr", "volume_indisc", "volume_outdisc"]:
-                        self.outdata[device][port].setdefault(key, []).append(int(bucket[key]["value"]) / 8)
                     if "mac_addresses" in bucket:
                         for macaddr in bucket["mac_addresses"]["buckets"]:
                             # mac can be 0:90:fb:76:e4:7b, 0:f:53:3b:a:f4 or 00:90:fb:76:e4:7b
@@ -75,6 +66,61 @@ class ESnetES():
                             newmac = ':'.join([f"{int(x, 16):02x}" for x in macaddr['key'].split(':')])
                             if newmac not in self.outdata[device][port].get("mac_addresses", []):
                                 self.outdata[device][port].setdefault("mac_addresses", []).append(newmac)
+
+    def get_dev_data(self, **kwargs):
+        """Get device data"""
+        # Helper to extract and compute irate for a given field
+        def irate(field):
+            v0 = prev_doc.get("values", {}).get(field, {}).get("val", 0)
+            v1 = last_doc.get("values", {}).get(field, {}).get("val", 0)
+            return (float(v1 - v0) / dt) * 8
+        mquery = {
+           "size":2,
+           "sort": [{"start": "asc"}],
+            "_source": [
+                    "start",
+                    "values.in_bits",
+                    "values.out_bits",
+                    "values.in_errors",
+                    "values.out_errors",
+                    "values.in_discards",
+                    "values.out_discards",
+            ],
+            "query":{"bool":{"filter":[{"range":{"start":{"gte":"now-6m","lte":"now-1m"}}}]}}}
+
+        for device, ports in self.monports['ports'].items():
+            # Get all oscars_ids for the device abd port
+            self.logger.info(f'Query info for device: {device}')
+            for port in ports:
+                self.logger.info(f'Query info for port: {port}')
+                query = copy.deepcopy(mquery)
+                # Add filter for device and port
+                query["query"]["bool"]["filter"].append({"query_string": {"analyze_wildcard": True, "query": f"meta.id: \"{port}\""}})
+                #query["query"]["bool"]["filter"].append({"query_string": {"analyze_wildcard": True, "query": f"meta.device: \"{device}\""}})
+                res = self.client.search(body=query, index=self.ind, preference="primary")
+                hits = res.get("hits", {}).get("hits", [])
+                if len(hits) < 2:
+                    self.logger.warning(f"Not enough data points for {device}:{port} to calculate irate.")
+                    continue
+                # Extract the two samples
+                prev_doc = hits[0]["_source"]
+                last_doc = hits[1]["_source"]
+                t0 = parseEsTime(prev_doc["start"])
+                t1 = parseEsTime(last_doc["start"])
+                dt = t1 - t0
+                dt = dt.total_seconds() if dt.total_seconds() > 0 else 1
+
+                # Do an aggregation of results and log everything
+                self.outdata.setdefault(device, {}).setdefault(port, {})
+                self.outdata[device][port]["in_bits"] = irate("in_bits")
+                self.outdata[device][port]["out_bits"] = irate("out_bits")
+                self.outdata[device][port]["in_errors"] = irate("in_errors")
+                self.outdata[device][port]["out_errors"] = irate("out_errors")
+                self.outdata[device][port]["in_discards"] = irate("in_discards")
+                self.outdata[device][port]["out_discards"] = irate("out_discards")
+        # Get mac data
+        self.get_mac_data(**kwargs)
+
 
 
     def get_all(self, **kwargs):
@@ -125,8 +171,8 @@ class ESnetES():
         """Write out file in an expected output format"""
         snmpout = {}
         incr = 0
-        mapkeys = {"volume_in": "ifHCInOctets", "volume_out": "ifHCOutOctets", "volume_inerr": "ifInErrors",
-                   "volume_outerr": "ifOutErrors", "volume_indisc": "ifInDiscards", "volume_outdisc": "ifOutDiscards"}
+        mapkeys = {"in_bits": "ifHCInOctets", "out_bits": "ifHCOutOctets", "in_errors": "ifInErrors",
+                   "out_errors": "ifOutErrors", "in_discards": "ifInDiscards", "out_discards": "ifOutDiscards"}
         for device, portdata in self.outdata.items():
             devout = snmpout.setdefault(device, {})
             for port, data in portdata.items():
@@ -134,13 +180,7 @@ class ESnetES():
                 tmpd = {"ifDescr": port, "ifType": "6", "ifAlias": port, "hostname": device}
                 for key, mapkey in mapkeys.items():
                     if key in data:
-                        if len(data[key]) >= 2:
-                            tmpd[mapkey] = str(int(sum(data[key][-2:]) / 2))
-                        elif len(data[key]) == 1:
-                            tmpd[mapkey] = str(int(data[key][0]))
-                        else:
-                            tmpd[mapkey] = "0"
-                        tmpd[mapkey + "_avgrate"] = str(int(sum(data[key])/len(data[key])))
+                        tmpd[mapkey] = int(data[key])
                 devout.setdefault(device, {}).setdefault(str(incr), tmpd)
                 # Add mac addresses
                 if 'mac_addresses' in data:

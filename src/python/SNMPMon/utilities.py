@@ -33,6 +33,10 @@ def isValFloat(inVal):
         return False
     return True
 
+def parseEsTime(timestr):
+    """Parse ES Time to datetime object"""
+    return datetime.datetime.strptime(timestr, "%Y-%m-%dT%H:%M:%SZ")
+
 def evaldict(inputDict):
     """Output from the server needs to be evaluated."""
     if not inputDict:
