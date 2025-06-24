@@ -42,7 +42,7 @@ class ESnetES():
            "size":0,
            "_source":False,
            "aggs":{"volume_per_interval": {
-                        "date_histogram": {"field": "start","fixed_interval": "1m"},
+                        "date_histogram": {"field": "start","fixed_interval": "30s"},
                         "aggs": {"volume_in":{"sum":{"field":"values.in_bits.delta"}},
                                  "volume_out":{"sum":{"field":"values.out_bits.delta"}},
                                  "volume_inerr":{"sum":{"field":"values.in_errors.delta"}},
@@ -67,7 +67,7 @@ class ESnetES():
                 self.outdata.setdefault(device, {}).setdefault(port, {})
                 for bucket in res["aggregations"]["volume_per_interval"]["buckets"]:
                     for key in ["volume_in", "volume_out", "volume_inerr", "volume_outerr", "volume_indisc", "volume_outdisc"]:
-                        self.outdata[device][port].setdefault(key, []).append(int(bucket[key]["value"]) / 8)
+                        self.outdata[device][port].setdefault(key, []).append(int(bucket[key]["value"]) / 8 / 30)
                     if "mac_addresses" in bucket:
                         for macaddr in bucket["mac_addresses"]["buckets"]:
                             # mac can be 0:90:fb:76:e4:7b, 0:f:53:3b:a:f4 or 00:90:fb:76:e4:7b
@@ -134,9 +134,8 @@ class ESnetES():
                 tmpd = {"ifDescr": port, "ifType": "6", "ifAlias": port, "hostname": device}
                 for key, mapkey in mapkeys.items():
                     if key in data:
-                        sumdata = sum(data[key])
-                        countdata = len(data[key])
-                        tmpd[mapkey] = str(int(sumdata/countdata))
+                        tmpd[mapkey + "_rate"] = str(int(sum(data[key])/len(data[key])))
+                        tmpd[mapkey] = str(int(sum(data[key]) * 30))
                 devout.setdefault(device, {}).setdefault(str(incr), tmpd)
                 # Add mac addresses
                 if 'mac_addresses' in data:
